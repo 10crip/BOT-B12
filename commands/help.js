@@ -85,7 +85,22 @@ module.exports = {
                         `**Como usar:** \`${prefix}painelponto\`\n\n` +
                         `\`${prefix}setadmponto @cargo1 @cargo2\`\n` +
                         `Define os cargos que podem usar o botão de rank do bate-ponto.\n` +
-                        `**Como usar:** \`${prefix}setadmponto @cargo1 @cargo2\``,
+                        `**Como usar:** \`${prefix}setadmponto @cargo1 @cargo2\`\n\n` +
+                        `\`${prefix}addcanal <id>\`\n` +
+                        `Adiciona um canal de voz permitido para o bate-ponto.\n` +
+                        `**Como usar:** \`${prefix}addcanal 123456789012345678\`\n\n` +
+                        `\`${prefix}removecanal <id>\`\n` +
+                        `Remove um canal de voz da lista permitida do bate-ponto.\n` +
+                        `**Como usar:** \`${prefix}removecanal 123456789012345678\`\n\n` +
+                        `\`${prefix}addcategoria <id>\`\n` +
+                        `Adiciona uma categoria permitida para o bate-ponto.\n` +
+                        `**Como usar:** \`${prefix}addcategoria 123456789012345678\`\n\n` +
+                        `\`${prefix}removecategoria <id>\`\n` +
+                        `Remove uma categoria da lista permitida do bate-ponto.\n` +
+                        `**Como usar:** \`${prefix}removecategoria 123456789012345678\`\n\n` +
+                        `\`${prefix}listabp\`\n` +
+                        `Mostra todos os canais e categorias liberados no bate-ponto.\n` +
+                        `**Como usar:** \`${prefix}listabp\``,
                     inline: false
                 },
                 {

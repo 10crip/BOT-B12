@@ -11,9 +11,6 @@ module.exports = {
     name: 'interactionCreate',
 
     async execute(interaction) {
-        // =====================================
-        // SELECT MENU DO TICKET
-        // =====================================
         if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_select') {
             const categoryId = process.env.TICKET_CATEGORY_ID;
             const staffRoleId = process.env.STAFF_ROLE_ID;
@@ -121,9 +118,6 @@ module.exports = {
             });
         }
 
-        // =====================================
-        // BOTÃO DE FECHAR TICKET
-        // =====================================
         if (interaction.isButton() && interaction.customId === 'fechar_ticket') {
             await interaction.reply({
                 content: '🔒 Fechando ticket em 5 segundos...',

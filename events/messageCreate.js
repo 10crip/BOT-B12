@@ -23,6 +23,9 @@ module.exports = {
 
     async execute(message, client) {
         if (!message.guild) return;
+        if (!message.author.bot === false) {
+            // continua
+        }
         if (message.author.bot) return;
 
         const session = getSession(message.channel.id);

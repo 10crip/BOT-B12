@@ -1,5 +1,5 @@
-module.exports = {
-    name: 'ready',
+=module.exports = {
+    name: 'clientReady',
     once: true,
 
     async execute(client) {

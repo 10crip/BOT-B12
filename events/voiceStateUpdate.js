@@ -12,11 +12,11 @@ const awayTimers = new Map();
 
 function msToReadable(ms) {
     const totalSeconds = Math.floor(ms / 1000);
-    const horas = Math.floor(totalSeconds / 3600);
-    const minutos = Math.floor((totalSeconds % 3600) / 60);
-    const segundos = totalSeconds % 60;
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
 
-    return `${horas}h ${minutos}m ${segundos}s`;
+    return `${hours}h ${minutes}m ${seconds}s`;
 }
 
 function formatDateTime(date) {
@@ -27,9 +27,9 @@ function formatDateTime(date) {
 }
 
 async function sendLog(guild, embed) {
-    const canal = guild.channels.cache.get(LOG_CHANNEL_ID);
-    if (!canal) return;
-    await canal.send({ embeds: [embed] }).catch(() => {});
+    const channel = guild.channels.cache.get(LOG_CHANNEL_ID);
+    if (!channel) return;
+    await channel.send({ embeds: [embed] }).catch(() => {});
 }
 
 module.exports = {
@@ -96,46 +96,44 @@ module.exports = {
 
                 const embed = new EmbedBuilder()
                     .setColor('#2B2D31')
-                    .setTitle('⏱️ PONTO FECHADO AUTOMATICAMENTE')
+                    .setTitle('⏱️ TIME TRACKING CLOSED AUTOMATICALLY')
                     .addFields(
                         {
-                            name: 'MEMBRO',
+                            name: 'MEMBER',
                             value: `${member}\n\`${member.user.tag}\``,
                             inline: false
                         },
                         {
-                            name: 'MOTIVO',
-                            value: 'Ficou 1 minuto e 30 segundos fora de um canal permitido.',
+                            name: 'REASON',
+                            value: 'User stayed 1 minute and 30 seconds outside an allowed voice channel.',
                             inline: false
                         },
                         {
-                            name: 'TEMPO FEITO',
+                            name: 'TRACKED TIME',
                             value: msToReadable(sessionMs),
                             inline: false
                         },
                         {
-                            name: 'DATA',
+                            name: 'DATE',
                             value: data,
                             inline: true
                         },
                         {
-                            name: 'HORA',
+                            name: 'TIME',
                             value: hora,
                             inline: true
                         }
                     )
-                    .setFooter({
-                        text: 'Sistema de bate-ponto B12'
-                    });
+                    .setFooter({ text: 'B12 time tracking system' });
 
                 await sendLog(guild, embed);
 
                 awayTimers.delete(timerKey);
 
                 await member.send(
-                    `⏱️ Seu bate-ponto foi fechado automaticamente em **${guild.name}**.\n` +
-                    `Motivo: você ficou mais de 1 minuto e 30 segundos fora de um canal permitido.\n` +
-                    `Tempo registrado: **${msToReadable(sessionMs)}**`
+                    `⏱️ Your time tracking was closed automatically in **${guild.name}**.\n` +
+                    `Reason: you stayed more than 1 minute and 30 seconds outside an allowed voice channel.\n` +
+                    `Tracked time: **${msToReadable(sessionMs)}**`
                 ).catch(() => {});
             }, 90000);
 

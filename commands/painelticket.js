@@ -11,13 +11,9 @@ module.exports = {
     async execute(message) {
         if (!message.guild) return;
 
-        const guildName = process.env.TICKET_GUILD_NAME || 'B12';
-        const thumbUrl = process.env.TICKET_PANEL_THUMBNAIL || 'https://via.placeholder.com/128x128.png?text=B12';
-        const bannerUrl = process.env.TICKET_PANEL_BANNER || 'https://via.placeholder.com/700x200.png?text=ATENDIMENTO+B12';
-
         const embed = new EmbedBuilder()
             .setColor('#2B2D31')
-            .setTitle(`ATENDIMENTO ${guildName.toUpperCase()}`)
+            .setTitle('ATENDIMENTO B12')
             .setDescription(
                 'Está com alguma dúvida, problema ou precisa falar com a equipe? Selecione uma das opções abaixo para abrir um ticket e receber um atendimento personalizado de acordo com a sua necessidade.\n\n' +
                 '• **Esclarecimento de dúvidas gerais;**\n' +
@@ -25,8 +21,8 @@ module.exports = {
                 '• **Revisão de advertências/punições;**\n' +
                 '• **Proposta de parcerias.**'
             )
-            .setThumbnail(thumbUrl)
-            .setImage(bannerUrl);
+            .setThumbnail('https://via.placeholder.com/128x128.png?text=B12')
+            .setImage('https://via.placeholder.com/700x200.png?text=ATENDIMENTO+B12');
 
         const menu = new StringSelectMenuBuilder()
             .setCustomId('ticket_select')

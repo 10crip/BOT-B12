@@ -23,7 +23,6 @@ module.exports = {
                         `\`${prefix}painelticket\`\n` +
                         `Envia o painel de ticket no canal atual.\n` +
                         `**Como usar:** \`${prefix}painelticket\`\n\n` +
-
                         `\`${prefix}setadmticket @cargo1 @cargo2\`\n` +
                         `Define os cargos responsáveis por atender os tickets.\n` +
                         `**Como usar:** \`${prefix}setadmticket @cargo1 @cargo2\``,
@@ -35,7 +34,6 @@ module.exports = {
                         `\`${prefix}paineltransferencia\`\n` +
                         `Envia o painel de transferência no canal configurado.\n` +
                         `**Como usar:** \`${prefix}paineltransferencia\`\n\n` +
-
                         `\`${prefix}setadmrec @cargo1 @cargo2\`\n` +
                         `Define os cargos que podem aprovar ou recusar transferências.\n` +
                         `**Como usar:** \`${prefix}setadmrec @cargo1 @cargo2\``,
@@ -55,11 +53,9 @@ module.exports = {
                         `\`${prefix}setadmadv @cargo1 @cargo2\`\n` +
                         `Define os cargos que podem aplicar e remover advertências.\n` +
                         `**Como usar:** \`${prefix}setadmadv @cargo1 @cargo2\`\n\n` +
-
                         `\`${prefix}adv @membro motivo\`\n` +
                         `Inicia uma advertência em um membro. Depois disso, o staff precisa escrever \`confirmar\` no chat para concluir.\n` +
                         `**Como usar:** \`${prefix}adv @membro flood no chat\`\n\n` +
-
                         `\`${prefix}removeradv @membro\`\n` +
                         `Remove 1 advertência do membro por vez.\n` +
                         `**Como usar:** \`${prefix}removeradv @membro\``,
@@ -71,16 +67,25 @@ module.exports = {
                         `\`${prefix}setadmup @cargo1 @cargo2\`\n` +
                         `Define os cargos que podem promover e rebaixar membros.\n` +
                         `**Como usar:** \`${prefix}setadmup @cargo1 @cargo2\`\n\n` +
-
                         `\`${prefix}promover @membro\`\n` +
                         `Inicia uma promoção. Depois disso, o staff deve mencionar no chat primeiro o cargo novo e depois o cargo antigo.\n` +
                         `**Como usar:** \`${prefix}promover @membro\`\n` +
                         `**Depois responder no chat:** \`@CargoNovo @CargoAntigo\`\n\n` +
-
                         `\`${prefix}rebaixar @membro\`\n` +
                         `Inicia um rebaixamento. Depois disso, o staff deve mencionar no chat primeiro o cargo novo e depois o cargo antigo.\n` +
                         `**Como usar:** \`${prefix}rebaixar @membro\`\n` +
                         `**Depois responder no chat:** \`@CargoNovo @CargoAntigo\``,
+                    inline: false
+                },
+                {
+                    name: '⏱️ SISTEMA DE BATE-PONTO',
+                    value:
+                        `\`${prefix}painelponto\`\n` +
+                        `Envia o painel do bate-ponto no canal configurado.\n` +
+                        `**Como usar:** \`${prefix}painelponto\`\n\n` +
+                        `\`${prefix}setadmponto @cargo1 @cargo2\`\n` +
+                        `Define os cargos que podem usar o botão de rank do bate-ponto.\n` +
+                        `**Como usar:** \`${prefix}setadmponto @cargo1 @cargo2\``,
                     inline: false
                 },
                 {

@@ -70,7 +70,38 @@ function addWarning(guildId, userId, warningData) {
     return data[guildId][userId];
 }
 
+function removeWarning(guildId, userId) {
+    const data = readData();
+
+    if (!data[guildId]) data[guildId] = {};
+    if (!data[guildId][userId]) {
+        data[guildId][userId] = {
+            total: 0,
+            historico: []
+        };
+    }
+
+    if (data[guildId][userId].total <= 0) {
+        return {
+            total: 0,
+            historico: [],
+            removedWarning: null
+        };
+    }
+
+    const removedWarning = data[guildId][userId].historico.pop() || null;
+    data[guildId][userId].total = Math.max(0, data[guildId][userId].total - 1);
+
+    saveData(data);
+
+    return {
+        ...data[guildId][userId],
+        removedWarning
+    };
+}
+
 module.exports = {
     getUserWarnings,
-    addWarning
+    addWarning,
+    removeWarning
 };

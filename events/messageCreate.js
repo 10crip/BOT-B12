@@ -8,8 +8,16 @@ const {
 const PREFIX = process.env.PREFIX || '!';
 
 const { getSession, updateSession, deleteSession } = require('../utils/transferSessions');
+const { getPendingAdv, deletePendingAdv } = require('../utils/pendingAdv');
+const { getGuildConfig } = require('../guildConfig');
+const { getUserWarnings, addWarning } = require('../utils/advertencias');
 
 const REVISAO_TRANSFERENCIA_CHANNEL_ID = '1491244658448273550';
+const ADV_LOG_CHANNEL_ID = '1474852514359803994';
+
+const ADV_ROLE_1 = '1474972984841339074';
+const ADV_ROLE_2 = '1474973087199006863';
+const ADV_ROLE_3 = '1474973148179992576';
 
 const QUESTIONS = [
     '1 - QUAL SEU NOME NA CIDADE?',
@@ -18,16 +26,236 @@ const QUESTIONS = [
     '4 - PROVAS: FOTO/PRINT'
 ];
 
+function formatDateTime(date) {
+    const data = date.toLocaleDateString('pt-BR');
+    const hora = date.toLocaleTimeString('pt-BR');
+    return { data, hora };
+}
+
+async function aplicarAdvertencia(message, pendingData) {
+    const guild = message.guild;
+    const staffMember = await guild.members.fetch(pendingData.staffId).catch(() => null);
+    const alvoMember = await guild.members.fetch(pendingData.alvoId).catch(() => null);
+
+    if (!staffMember || !alvoMember) {
+        await message.reply('❌ Não foi possível concluir a advertência.')
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+            .catch(() => {});
+        return;
+    }
+
+    const agora = new Date();
+    const { data, hora } = formatDateTime(agora);
+
+    const warningData = {
+        motivo: pendingData.motivo,
+        staffId: staffMember.id,
+        staffTag: staffMember.user.tag,
+        data,
+        hora,
+        timestamp: agora.getTime()
+    };
+
+    const warningState = addWarning(guild.id, alvoMember.id, warningData);
+    const totalWarnings = warningState.total;
+
+    const rolesToClear = [ADV_ROLE_1, ADV_ROLE_2, ADV_ROLE_3];
+
+    for (const roleId of rolesToClear) {
+        if (alvoMember.roles.cache.has(roleId)) {
+            await alvoMember.roles.remove(roleId).catch(() => {});
+        }
+    }
+
+    let actionText = 'Advertência aplicada';
+    let appliedRole = null;
+    let banido = false;
+
+    if (totalWarnings === 1) {
+        appliedRole = ADV_ROLE_1;
+    } else if (totalWarnings === 2) {
+        appliedRole = ADV_ROLE_2;
+    } else if (totalWarnings === 3) {
+        appliedRole = ADV_ROLE_3;
+    } else if (totalWarnings >= 4) {
+        banido = true;
+        actionText = 'Banimento automático por exceder o limite de advertências';
+    }
+
+    if (appliedRole) {
+        await alvoMember.roles.add(appliedRole).catch(() => {});
+    }
+
+    const historicoTexto = warningState.historico
+        .map((item, index) => {
+            return `**${index + 1}ª advertência**\nMotivo: ${item.motivo}\nStaff: ${item.staffTag}\nData: ${item.data} às ${item.hora}`;
+        })
+        .join('\n\n')
+        .slice(0, 3900) || 'Nenhum histórico disponível.';
+
+    const logChannel = guild.channels.cache.get(ADV_LOG_CHANNEL_ID);
+
+    const embedLog = new EmbedBuilder()
+        .setColor('#ff0000')
+        .setTitle('🚨 REGISTRO DE ADVERTÊNCIA')
+        .addFields(
+            {
+                name: 'MEMBRO',
+                value: `${alvoMember} \n\`${alvoMember.user.tag}\``,
+                inline: false
+            },
+            {
+                name: 'STAFF RESPONSÁVEL',
+                value: `${staffMember} \n\`${staffMember.user.tag}\``,
+                inline: false
+            },
+            {
+                name: 'MOTIVO',
+                value: pendingData.motivo,
+                inline: false
+            },
+            {
+                name: 'DATA',
+                value: data,
+                inline: true
+            },
+            {
+                name: 'HORA',
+                value: hora,
+                inline: true
+            },
+            {
+                name: 'TOTAL DE ADVERTÊNCIAS',
+                value: `${totalWarnings}`,
+                inline: true
+            },
+            {
+                name: 'AÇÃO',
+                value: actionText,
+                inline: false
+            },
+            {
+                name: 'HISTÓRICO COMPLETO',
+                value: historicoTexto,
+                inline: false
+            }
+        )
+        .setFooter({
+            text: 'Sistema profissional de advertências B12'
+        });
+
+    if (logChannel) {
+        await logChannel.send({
+            embeds: [embedLog]
+        }).catch(() => {});
+    }
+
+    const embedDM = new EmbedBuilder()
+        .setColor('#ff0000')
+        .setTitle('🚨 VOCÊ RECEBEU UMA ADVERTÊNCIA')
+        .addFields(
+            {
+                name: 'SERVIDOR',
+                value: guild.name,
+                inline: false
+            },
+            {
+                name: 'MOTIVO',
+                value: pendingData.motivo,
+                inline: false
+            },
+            {
+                name: 'STAFF RESPONSÁVEL',
+                value: staffMember.user.tag,
+                inline: false
+            },
+            {
+                name: 'DATA',
+                value: data,
+                inline: true
+            },
+            {
+                name: 'HORA',
+                value: hora,
+                inline: true
+            },
+            {
+                name: 'TOTAL DE ADVERTÊNCIAS',
+                value: `${totalWarnings}`,
+                inline: true
+            },
+            {
+                name: 'AÇÃO APLICADA',
+                value: actionText,
+                inline: false
+            }
+        )
+        .setFooter({
+            text: 'Caso tenha dúvidas, contate a administração.'
+        });
+
+    await alvoMember.send({
+        embeds: [embedDM]
+    }).catch(() => {});
+
+    if (banido) {
+        await alvoMember.ban({
+            reason: `4ª advertência recebida. Motivo atual: ${pendingData.motivo}`
+        }).catch(() => {});
+    }
+
+    await message.reply(
+        `✅ Advertência aplicada com sucesso em ${alvoMember}.\n` +
+        `📌 Total atual: **${totalWarnings}**`
+    ).then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000)).catch(() => {});
+}
+
 module.exports = {
     name: 'messageCreate',
 
     async execute(message, client) {
         if (!message.guild) return;
-        if (!message.author.bot === false) {
-            // continua
-        }
         if (message.author.bot) return;
 
+        // ==================================================
+        // CONFIRMAÇÃO DE ADVERTÊNCIA
+        // ==================================================
+        if (message.content.toLowerCase().trim() === 'confirmar') {
+            const pendingKey = `${message.guild.id}:${message.channel.id}:${message.author.id}`;
+            const pendingAdv = getPendingAdv(pendingKey);
+
+            if (pendingAdv) {
+                if (Date.now() > pendingAdv.expiresAt) {
+                    deletePendingAdv(pendingKey);
+
+                    await message.reply('❌ O tempo para confirmar a advertência expirou.')
+                        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+                        .catch(() => {});
+                    return;
+                }
+
+                const guildConfig = getGuildConfig(message.guild.id);
+                const admAdvRoleIds = guildConfig.admAdvRoleIds || [];
+                const podeAdvertir = admAdvRoleIds.some(roleId => message.member.roles.cache.has(roleId));
+
+                if (!podeAdvertir) {
+                    await message.reply('❌ Você não tem mais permissão para confirmar advertências.')
+                        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+                        .catch(() => {});
+                    deletePendingAdv(pendingKey);
+                    return;
+                }
+
+                deletePendingAdv(pendingKey);
+                await aplicarAdvertencia(message, pendingAdv);
+                await message.delete().catch(() => {});
+                return;
+            }
+        }
+
+        // ==================================================
+        // SISTEMA DE TRANSFERÊNCIA
+        // ==================================================
         const session = getSession(message.channel.id);
 
         if (session && session.type === 'transferencia' && session.status === 'collecting') {
@@ -139,6 +367,9 @@ module.exports = {
             return;
         }
 
+        // ==================================================
+        // COMANDOS
+        // ==================================================
         if (!message.content.startsWith(PREFIX)) return;
 
         const args = message.content.slice(PREFIX.length).trim().split(/\s+/);

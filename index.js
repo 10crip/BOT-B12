@@ -18,45 +18,45 @@ const client = new Client({
 client.commands = new Collection();
 
 // ==================================================
-// 📦 CARREGAR COMANDOS
+// CARREGAR COMANDOS
 // ==================================================
 const commandsPath = path.join(__dirname, 'commands');
 
 if (fs.existsSync(commandsPath)) {
-    fs.readdirSync(commandsPath)
-        .filter(file => file.endsWith('.js'))
-        .forEach(file => {
-            try {
-                const command = require(`./commands/${file}`);
+    const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
-                if (!command || !command.name || typeof command.execute !== 'function') {
-                    console.log(`⚠️ Comando ignorado: ${file}`);
-                    return;
-                }
+    for (const file of commandFiles) {
+        try {
+            const command = require(path.join(commandsPath, file));
 
-                client.commands.set(command.name, command);
-                console.log(`✅ Comando carregado: ${command.name}`);
-            } catch (error) {
-                console.error(`❌ Erro ao carregar comando ${file}:`, error);
+            if (!command || !command.name || typeof command.execute !== 'function') {
+                console.log(`⚠️ Comando ignorado: ${file}`);
+                continue;
             }
-        });
+
+            client.commands.set(command.name, command);
+            console.log(`✅ Comando carregado: ${command.name}`);
+        } catch (error) {
+            console.error(`❌ Erro ao carregar comando ${file}:`, error);
+        }
+    }
 }
 
 // ==================================================
-// 📦 CARREGAR EVENTOS
+// CARREGAR EVENTOS
 // ==================================================
 const eventsPath = path.join(__dirname, 'events');
 
 if (fs.existsSync(eventsPath)) {
     const eventFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
 
-    eventFiles.forEach(file => {
+    for (const file of eventFiles) {
         try {
-            const event = require(`./events/${file}`);
+            const event = require(path.join(eventsPath, file));
 
             if (!event || !event.name || typeof event.execute !== 'function') {
                 console.log(`⚠️ Evento ignorado: ${file}`);
-                return;
+                continue;
             }
 
             if (event.once) {
@@ -69,11 +69,22 @@ if (fs.existsSync(eventsPath)) {
         } catch (error) {
             console.error(`❌ Erro ao carregar evento ${file}:`, error);
         }
-    });
+    }
 }
 
 // ==================================================
-// 🔐 LOGIN
+// TRATAMENTO DE ERROS
+// ==================================================
+process.on('unhandledRejection', error => {
+    console.error('❌ Unhandled Rejection:', error);
+});
+
+process.on('uncaughtException', error => {
+    console.error('❌ Uncaught Exception:', error);
+});
+
+// ==================================================
+// LOGIN
 // ==================================================
 client.login(process.env.TOKEN).catch(error => {
     console.error('❌ Erro ao conectar o bot:', error);

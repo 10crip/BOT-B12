@@ -7,6 +7,8 @@ const {
     ButtonStyle
 } = require('discord.js');
 
+const { getGuildConfig } = require('../guildConfig');
+
 module.exports = {
     name: 'interactionCreate',
 
@@ -15,13 +17,14 @@ module.exports = {
         // SELECT MENU DO TICKET
         // ==================================================
         if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_select') {
-            const staffRoleId = process.env.STAFF_ROLE_ID;
-            const guildName = process.env.TICKET_GUILD_NAME || 'B12';
-            const ticketImage = process.env.TICKET_IMAGE_URL || 'https://via.placeholder.com/256x256.png?text=B12';
+            const guildConfig = getGuildConfig(interaction.guild.id);
+            const staffRoleId = guildConfig.ticketStaffRoleId;
+            const guildName = 'B12';
+            const ticketImage = 'https://via.placeholder.com/256x256.png?text=B12';
 
             if (!staffRoleId) {
                 return interaction.reply({
-                    content: '❌ Configure STAFF_ROLE_ID nas variáveis do Railway.',
+                    content: '❌ Nenhum cargo de ticket foi configurado ainda. Use `!setadmticket @cargo`.',
                     ephemeral: true
                 });
             }
@@ -107,7 +110,7 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setColor('#2B2D31')
-                .setTitle(`🎫 | TICKET ABERTO - ${guildName.toUpperCase()}`)
+                .setTitle(`🎫 | TICKET ABERTO - ${guildName}`)
                 .setDescription(
                     `@ [${guildName.toLowerCase()}] ${interaction.user.username}, seja bem-vindo!\n\n` +
                     `*Nós, superiores, estamos cientes da abertura deste ticket.*\n` +
@@ -158,7 +161,8 @@ module.exports = {
         // BOTÃO ATENDER
         // ==================================================
         if (interaction.isButton() && interaction.customId === 'assumir_ticket') {
-            const staffRoleId = process.env.STAFF_ROLE_ID;
+            const guildConfig = getGuildConfig(interaction.guild.id);
+            const staffRoleId = guildConfig.ticketStaffRoleId;
 
             if (staffRoleId && !interaction.member.roles.cache.has(staffRoleId)) {
                 return interaction.reply({

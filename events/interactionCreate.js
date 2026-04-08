@@ -15,14 +15,22 @@ module.exports = {
         // SELECT MENU DO TICKET
         // ==================================================
         if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_select') {
-            const categoryId = process.env.TICKET_CATEGORY_ID;
             const staffRoleId = process.env.STAFF_ROLE_ID;
             const guildName = process.env.TICKET_GUILD_NAME || 'B12';
             const ticketImage = process.env.TICKET_IMAGE_URL || 'https://via.placeholder.com/256x256.png?text=B12';
 
-            if (!categoryId || !staffRoleId) {
+            if (!staffRoleId) {
                 return interaction.reply({
-                    content: '❌ Configure TICKET_CATEGORY_ID e STAFF_ROLE_ID nas variáveis do Railway.',
+                    content: '❌ Configure STAFF_ROLE_ID nas variáveis do Railway.',
+                    ephemeral: true
+                });
+            }
+
+            const categoriaDoPainel = interaction.channel.parentId;
+
+            if (!categoriaDoPainel) {
+                return interaction.reply({
+                    content: '❌ O canal do painel precisa estar dentro de uma categoria para o ticket ser criado nela.',
                     ephemeral: true
                 });
             }
@@ -66,7 +74,7 @@ module.exports = {
             const channel = await interaction.guild.channels.create({
                 name: nomeCanal,
                 type: ChannelType.GuildText,
-                parent: categoryId,
+                parent: categoriaDoPainel,
                 topic: `ticket-owner:${interaction.user.id}`,
                 permissionOverwrites: [
                     {
@@ -160,6 +168,7 @@ module.exports = {
             }
 
             const embedAtual = interaction.message.embeds[0];
+
             if (!embedAtual) {
                 return interaction.reply({
                     content: '❌ Não foi possível atualizar este ticket.',

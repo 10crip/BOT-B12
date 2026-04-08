@@ -1,6 +1,4 @@
-const {
-    EmbedBuilder
-} = require('discord.js');
+const { EmbedBuilder } = require('discord.js');
 
 const { getGuildConfig } = require('../guildConfig');
 const {
@@ -17,11 +15,11 @@ const RANK_CHANNEL_ID = '1491293762180354159';
 
 function msToReadable(ms) {
     const totalSeconds = Math.floor(ms / 1000);
-    const horas = Math.floor(totalSeconds / 3600);
-    const minutos = Math.floor((totalSeconds % 3600) / 60);
-    const segundos = totalSeconds % 60;
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
 
-    return `${horas}h ${minutos}m ${segundos}s`;
+    return `${hours}h ${minutes}m ${seconds}s`;
 }
 
 function formatDateTime(date) {
@@ -32,9 +30,9 @@ function formatDateTime(date) {
 }
 
 async function sendLog(guild, embed) {
-    const canal = guild.channels.cache.get(LOG_CHANNEL_ID);
-    if (!canal) return;
-    await canal.send({ embeds: [embed] }).catch(() => {});
+    const channel = guild.channels.cache.get(LOG_CHANNEL_ID);
+    if (!channel) return;
+    await channel.send({ embeds: [embed] }).catch(() => {});
 }
 
 module.exports = {
@@ -43,13 +41,10 @@ module.exports = {
     async execute(interaction) {
         if (!interaction.isButton()) return;
 
-        // ==================================================
-        // INICIAR PONTO
-        // ==================================================
         if (interaction.customId === 'iniciar_ponto') {
             if (interaction.channelId !== PANEL_CHANNEL_ID) {
                 return interaction.reply({
-                    content: '❌ Este botão só pode ser usado no painel oficial de bate-ponto.',
+                    content: '❌ This button can only be used in the official time tracking panel.',
                     ephemeral: true
                 });
             }
@@ -58,7 +53,7 @@ module.exports = {
 
             if (!currentVoice) {
                 return interaction.reply({
-                    content: '❌ Você precisa estar conectado em uma call para iniciar o bate-ponto.',
+                    content: '❌ You need to be connected to a voice channel to start the time tracking.',
                     ephemeral: true
                 });
             }
@@ -66,21 +61,21 @@ module.exports = {
             const voiceInfo = getTrackedVoiceInfo(interaction.guild.id, currentVoice);
 
             if (!voiceInfo.valid) {
-                const canaisPermitidosTexto = voiceInfo.allowedChannelIds.length
+                const allowedChannelsText = voiceInfo.allowedChannelIds.length
                     ? voiceInfo.allowedChannelIds.map(id => `\`${id}\``).join('\n')
-                    : '`nenhum canal configurado`';
+                    : '`no channels configured`';
 
-                const categoriasPermitidasTexto = voiceInfo.allowedCategoryIds.length
+                const allowedCategoriesText = voiceInfo.allowedCategoryIds.length
                     ? voiceInfo.allowedCategoryIds.map(id => `\`${id}\``).join('\n')
-                    : '`nenhuma categoria configurada`';
+                    : '`no categories configured`';
 
                 return interaction.reply({
                     content:
-                        `❌ Para iniciar o bate-ponto, você precisa estar em uma call válida configurada no sistema.\n\n` +
-                        `🔎 Canal detectado: \`${voiceInfo.channelId || 'nenhum'}\`\n` +
-                        `📁 Categoria detectada: \`${voiceInfo.parentId || 'nenhuma'}\`\n\n` +
-                        `✅ Canais permitidos:\n${canaisPermitidosTexto}\n\n` +
-                        `✅ Categorias permitidas:\n${categoriasPermitidasTexto}`,
+                        `❌ To start time tracking, you must be in an allowed voice channel.\n\n` +
+                        `🔎 Detected channel: \`${voiceInfo.channelId || 'none'}\`\n` +
+                        `📁 Detected category: \`${voiceInfo.parentId || 'none'}\`\n\n` +
+                        `✅ Allowed channels:\n${allowedChannelsText}\n\n` +
+                        `✅ Allowed categories:\n${allowedCategoriesText}`,
                     ephemeral: true
                 });
             }
@@ -89,7 +84,7 @@ module.exports = {
 
             if (point.active) {
                 return interaction.reply({
-                    content: '❌ Você já está com um ponto aberto.',
+                    content: '❌ You already have an active time tracking session.',
                     ephemeral: true
                 });
             }
@@ -110,58 +105,53 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setColor('#2B2D31')
-                .setTitle('🟢 PONTO INICIADO')
+                .setTitle('🟢 TIME TRACKING STARTED')
                 .addFields(
                     {
-                        name: 'MEMBRO',
+                        name: 'MEMBER',
                         value: `${interaction.user}\n\`${interaction.user.tag}\``,
                         inline: false
                     },
                     {
-                        name: 'CANAL DE VOZ',
+                        name: 'VOICE CHANNEL',
                         value: `${currentVoice}`,
                         inline: false
                     },
                     {
-                        name: 'CATEGORIA',
-                        value: `\`${voiceInfo.parentId || 'sem categoria'}\``,
+                        name: 'CATEGORY',
+                        value: `\`${voiceInfo.parentId || 'no category'}\``,
                         inline: false
                     },
                     {
-                        name: 'VALIDADO POR',
-                        value: voiceInfo.matchedBy === 'channel' ? 'Canal permitido' : 'Categoria permitida',
+                        name: 'VALIDATED BY',
+                        value: voiceInfo.matchedBy === 'channel' ? 'Allowed channel' : 'Allowed category',
                         inline: false
                     },
                     {
-                        name: 'DATA',
+                        name: 'DATE',
                         value: data,
                         inline: true
                     },
                     {
-                        name: 'HORA',
+                        name: 'TIME',
                         value: hora,
                         inline: true
                     }
                 )
-                .setFooter({
-                    text: 'Sistema de bate-ponto B12'
-                });
+                .setFooter({ text: 'B12 time tracking system' });
 
             await sendLog(interaction.guild, embed);
 
             return interaction.reply({
-                content: '✅ Seu bate-ponto foi iniciado com sucesso.',
+                content: '✅ Your time tracking has started successfully.',
                 ephemeral: true
             });
         }
 
-        // ==================================================
-        // FECHAR PONTO
-        // ==================================================
         if (interaction.customId === 'fechar_ponto') {
             if (interaction.channelId !== PANEL_CHANNEL_ID) {
                 return interaction.reply({
-                    content: '❌ Este botão só pode ser usado no painel oficial de bate-ponto.',
+                    content: '❌ This button can only be used in the official time tracking panel.',
                     ephemeral: true
                 });
             }
@@ -170,7 +160,7 @@ module.exports = {
 
             if (!point.active) {
                 return interaction.reply({
-                    content: '❌ Você não possui um ponto aberto.',
+                    content: '❌ You do not have an active time tracking session.',
                     ephemeral: true
                 });
             }
@@ -187,48 +177,43 @@ module.exports = {
 
             const embed = new EmbedBuilder()
                 .setColor('#2B2D31')
-                .setTitle('🔴 PONTO FECHADO')
+                .setTitle('🔴 TIME TRACKING CLOSED')
                 .addFields(
                     {
-                        name: 'MEMBRO',
+                        name: 'MEMBER',
                         value: `${interaction.user}\n\`${interaction.user.tag}\``,
                         inline: false
                     },
                     {
-                        name: 'TEMPO FEITO',
+                        name: 'TRACKED TIME',
                         value: msToReadable(sessionMs),
                         inline: false
                     },
                     {
-                        name: 'DATA',
+                        name: 'DATE',
                         value: data,
                         inline: true
                     },
                     {
-                        name: 'HORA',
+                        name: 'TIME',
                         value: hora,
                         inline: true
                     }
                 )
-                .setFooter({
-                    text: 'Sistema de bate-ponto B12'
-                });
+                .setFooter({ text: 'B12 time tracking system' });
 
             await sendLog(interaction.guild, embed);
 
             return interaction.reply({
-                content: `✅ Seu ponto foi fechado. Tempo registrado: **${msToReadable(sessionMs)}**`,
+                content: `✅ Your session has been closed. Tracked time: **${msToReadable(sessionMs)}**`,
                 ephemeral: true
             });
         }
 
-        // ==================================================
-        // RANK
-        // ==================================================
         if (interaction.customId === 'rank_ponto') {
             if (interaction.channelId !== PANEL_CHANNEL_ID) {
                 return interaction.reply({
-                    content: '❌ Este botão só pode ser usado no painel oficial de bate-ponto.',
+                    content: '❌ This button can only be used in the official time tracking panel.',
                     ephemeral: true
                 });
             }
@@ -236,45 +221,39 @@ module.exports = {
             const guildConfig = getGuildConfig(interaction.guild.id);
             const admPontoRoleIds = guildConfig.admPontoRoleIds || [];
 
-            const podeUsar = admPontoRoleIds.some(roleId => interaction.member.roles.cache.has(roleId));
+            const canUse = admPontoRoleIds.some(roleId => interaction.member.roles.cache.has(roleId));
 
-            if (!podeUsar) {
+            if (!canUse) {
                 return interaction.reply({
-                    content: '❌ Você não tem permissão para usar o rank do bate-ponto.',
+                    content: '❌ You do not have permission to use the time tracking rank.',
                     ephemeral: true
                 });
             }
 
             const top10 = getTop10(interaction.guild.id);
-            const canalRank = interaction.guild.channels.cache.get(RANK_CHANNEL_ID);
+            const rankChannel = interaction.guild.channels.cache.get(RANK_CHANNEL_ID);
 
-            if (!canalRank) {
+            if (!rankChannel) {
                 return interaction.reply({
-                    content: '❌ Não encontrei o canal de rank do bate-ponto.',
+                    content: '❌ Rank channel not found.',
                     ephemeral: true
                 });
             }
 
-            const descricao = top10.length
-                ? top10.map((item, index) => {
-                    return `**${index + 1}.** <@${item.userId}> — \`${msToReadable(item.totalMs)}\``;
-                }).join('\n')
-                : 'Nenhum registro encontrado.';
+            const description = top10.length
+                ? top10.map((item, index) => `**${index + 1}.** <@${item.userId}> — \`${msToReadable(item.totalMs)}\``).join('\n')
+                : 'No records found.';
 
             const embed = new EmbedBuilder()
                 .setColor('#2B2D31')
-                .setTitle('🏆 TOP 10 - BATE-PONTO B12')
-                .setDescription(descricao)
-                .setFooter({
-                    text: `Solicitado por ${interaction.user.tag}`
-                });
+                .setTitle('🏆 TOP 10 - B12 TIME TRACKING')
+                .setDescription(description)
+                .setFooter({ text: `Requested by ${interaction.user.tag}` });
 
-            await canalRank.send({
-                embeds: [embed]
-            }).catch(() => {});
+            await rankChannel.send({ embeds: [embed] }).catch(() => {});
 
             return interaction.reply({
-                content: `✅ O rank do bate-ponto foi enviado em <#${RANK_CHANNEL_ID}>.`,
+                content: `✅ The rank was sent to <#${RANK_CHANNEL_ID}>.`,
                 ephemeral: true
             });
         }

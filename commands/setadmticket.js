@@ -12,20 +12,20 @@ module.exports = {
                 .catch(() => {});
         }
 
-        const cargo = message.mentions.roles.first();
+        const cargos = [...message.mentions.roles.values()];
 
-        if (!cargo) {
-            return message.reply(`❌ Use assim: \`${process.env.PREFIX || '!'}setadmticket @cargo\``)
-                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+        if (!cargos.length) {
+            return message.reply(`❌ Use assim: \`${process.env.PREFIX || '!'}setadmticket @cargo1 @cargo2 @cargo3\``)
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
                 .catch(() => {});
         }
 
         updateGuildConfig(message.guild.id, {
-            ticketStaffRoleId: cargo.id
+            ticketStaffRoleIds: cargos.map(cargo => cargo.id)
         });
 
-        await message.reply(`✅ Cargo de atendimento do ticket definido como ${cargo}.`)
-            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+        await message.reply(`✅ Cargos do ticket definidos como: ${cargos.join(', ')}`)
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
             .catch(() => {});
 
         await message.delete().catch(() => {});

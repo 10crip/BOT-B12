@@ -9,11 +9,14 @@ const PREFIX = process.env.PREFIX || '!';
 
 const { getSession, updateSession, deleteSession } = require('../utils/transferSessions');
 const { getPendingAdv, deletePendingAdv } = require('../utils/pendingAdv');
+const { getPendingRank, deletePendingRank } = require('../utils/pendingRank');
 const { getGuildConfig } = require('../guildConfig');
 const { getUserWarnings, addWarning } = require('../utils/advertencias');
 
 const REVISAO_TRANSFERENCIA_CHANNEL_ID = '1491244658448273550';
 const ADV_LOG_CHANNEL_ID = '1474852514359803994';
+const PROMO_LOG_CHANNEL_ID = '1474852514581975245';
+const REBAIXA_LOG_CHANNEL_ID = '1474852514581975246';
 
 const ADV_ROLE_1 = '1474972984841339074';
 const ADV_ROLE_2 = '1474973087199006863';
@@ -30,6 +33,142 @@ function formatDateTime(date) {
     const data = date.toLocaleDateString('pt-BR');
     const hora = date.toLocaleTimeString('pt-BR');
     return { data, hora };
+}
+
+async function aplicarMudancaDeCargo(message, pendingRank) {
+    const guild = message.guild;
+    const staffMember = await guild.members.fetch(pendingRank.staffId).catch(() => null);
+    const alvoMember = await guild.members.fetch(pendingRank.alvoId).catch(() => null);
+
+    if (!staffMember || !alvoMember) {
+        await message.reply('❌ Não foi possível concluir a operação.')
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+            .catch(() => {});
+        return;
+    }
+
+    const cargos = [...message.mentions.roles.values()];
+
+    if (cargos.length < 2) {
+        await message.reply(
+            '❌ Você precisa mencionar **2 cargos**: primeiro o cargo novo e depois o cargo antigo.\n\nExemplo:\n@CargoNovo @CargoAntigo'
+        ).then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000)).catch(() => {});
+        return;
+    }
+
+    const cargoNovo = cargos[0];
+    const cargoAntigo = cargos[1];
+
+    await alvoMember.roles.add(cargoNovo).catch(() => {});
+    await alvoMember.roles.remove(cargoAntigo).catch(() => {});
+
+    const agora = new Date();
+    const { data, hora } = formatDateTime(agora);
+
+    const isPromocao = pendingRank.type === 'promocao';
+    const titulo = isPromocao ? '📈 REGISTRO DE PROMOÇÃO' : '📉 REGISTRO DE REBAIXAMENTO';
+    const acaoTexto = isPromocao ? 'PROMOÇÃO' : 'REBAIXAMENTO';
+    const canalLogId = isPromocao ? PROMO_LOG_CHANNEL_ID : REBAIXA_LOG_CHANNEL_ID;
+
+    const embedLog = new EmbedBuilder()
+        .setColor('#2B2D31')
+        .setTitle(titulo)
+        .addFields(
+            {
+                name: 'MEMBRO',
+                value: `${alvoMember}\n\`${alvoMember.user.tag}\``,
+                inline: false
+            },
+            {
+                name: 'STAFF RESPONSÁVEL',
+                value: `${staffMember}\n\`${staffMember.user.tag}\``,
+                inline: false
+            },
+            {
+                name: 'CARGO NOVO',
+                value: `${cargoNovo}`,
+                inline: true
+            },
+            {
+                name: 'CARGO REMOVIDO',
+                value: `${cargoAntigo}`,
+                inline: true
+            },
+            {
+                name: 'AÇÃO',
+                value: acaoTexto,
+                inline: true
+            },
+            {
+                name: 'DATA',
+                value: data,
+                inline: true
+            },
+            {
+                name: 'HORA',
+                value: hora,
+                inline: true
+            }
+        )
+        .setFooter({
+            text: 'Sistema profissional de promoções e rebaixamentos B12'
+        });
+
+    const canalLog = guild.channels.cache.get(canalLogId);
+    if (canalLog) {
+        await canalLog.send({
+            embeds: [embedLog]
+        }).catch(() => {});
+    }
+
+    await alvoMember.send({
+        embeds: [
+            new EmbedBuilder()
+                .setColor('#2B2D31')
+                .setTitle(isPromocao ? '📈 VOCÊ FOI PROMOVIDO' : '📉 VOCÊ FOI REBAIXADO')
+                .addFields(
+                    {
+                        name: 'SERVIDOR',
+                        value: guild.name,
+                        inline: false
+                    },
+                    {
+                        name: 'STAFF RESPONSÁVEL',
+                        value: staffMember.user.tag,
+                        inline: false
+                    },
+                    {
+                        name: 'CARGO NOVO',
+                        value: `${cargoNovo}`,
+                        inline: true
+                    },
+                    {
+                        name: 'CARGO REMOVIDO',
+                        value: `${cargoAntigo}`,
+                        inline: true
+                    },
+                    {
+                        name: 'DATA',
+                        value: data,
+                        inline: true
+                    },
+                    {
+                        name: 'HORA',
+                        value: hora,
+                        inline: true
+                    }
+                )
+                .setFooter({
+                    text: 'Em caso de dúvidas, procure a administração.'
+                })
+        ]
+    }).catch(() => {});
+
+    await message.reply(
+        `✅ ${isPromocao ? 'Promoção' : 'Rebaixamento'} aplicada com sucesso em ${alvoMember}.\n` +
+        `➕ Cargo novo: ${cargoNovo}\n` +
+        `➖ Cargo removido: ${cargoAntigo}`
+    ).then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000)).catch(() => {});
 }
 
 async function aplicarAdvertencia(message, pendingData) {
@@ -216,6 +355,43 @@ module.exports = {
     async execute(message, client) {
         if (!message.guild) return;
         if (message.author.bot) return;
+
+        // ==================================================
+        // RESPOSTA DE PROMOÇÃO / REBAIXAMENTO
+        // ==================================================
+        {
+            const pendingKey = `${message.guild.id}:${message.channel.id}:${message.author.id}`;
+            const pendingRank = getPendingRank(pendingKey);
+
+            if (pendingRank) {
+                if (Date.now() > pendingRank.expiresAt) {
+                    deletePendingRank(pendingKey);
+
+                    await message.reply('❌ O tempo para informar os cargos expirou.')
+                        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+                        .catch(() => {});
+                    return;
+                }
+
+                const guildConfig = getGuildConfig(message.guild.id);
+                const admUpRoleIds = guildConfig.admUpRoleIds || [];
+                const podeUsar = admUpRoleIds.some(roleId => message.member.roles.cache.has(roleId));
+
+                if (!podeUsar) {
+                    deletePendingRank(pendingKey);
+
+                    await message.reply('❌ Você não tem mais permissão para concluir essa ação.')
+                        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+                        .catch(() => {});
+                    return;
+                }
+
+                deletePendingRank(pendingKey);
+                await aplicarMudancaDeCargo(message, pendingRank);
+                await message.delete().catch(() => {});
+                return;
+            }
+        }
 
         // ==================================================
         // CONFIRMAÇÃO DE ADVERTÊNCIA

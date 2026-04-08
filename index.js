@@ -17,9 +17,6 @@ const client = new Client({
 
 client.commands = new Collection();
 
-// ==================================================
-// CARREGAR COMANDOS
-// ==================================================
 const commandsPath = path.join(__dirname, 'commands');
 
 if (fs.existsSync(commandsPath)) {
@@ -42,9 +39,6 @@ if (fs.existsSync(commandsPath)) {
     }
 }
 
-// ==================================================
-// CARREGAR EVENTOS
-// ==================================================
 const eventsPath = path.join(__dirname, 'events');
 
 if (fs.existsSync(eventsPath)) {
@@ -72,9 +66,6 @@ if (fs.existsSync(eventsPath)) {
     }
 }
 
-// ==================================================
-// TRATAMENTO DE ERROS
-// ==================================================
 process.on('unhandledRejection', error => {
     console.error('❌ Unhandled Rejection:', error);
 });
@@ -83,9 +74,6 @@ process.on('uncaughtException', error => {
     console.error('❌ Uncaught Exception:', error);
 });
 
-// ==================================================
-// LOGIN
-// ==================================================
 client.login(process.env.TOKEN).catch(error => {
     console.error('❌ Erro ao conectar o bot:', error);
 });

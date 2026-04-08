@@ -48,15 +48,15 @@ function isAdministrator(member) {
 }
 
 function formatPointConfig(config) {
-    const canais = config.allowedChannelIds?.length
+    const channels = config.allowedChannelIds?.length
         ? config.allowedChannelIds.map(id => `• <#${id}> (\`${id}\`)`).join('\n')
-        : '• Nenhum canal liberado';
+        : '• No allowed channels';
 
-    const categorias = config.allowedCategoryIds?.length
+    const categories = config.allowedCategoryIds?.length
         ? config.allowedCategoryIds.map(id => `• \`${id}\``).join('\n')
-        : '• Nenhuma categoria liberada';
+        : '• No allowed categories';
 
-    return { canais, categorias };
+    return { channels, categories };
 }
 
 async function handleStandaloneBpCommands(message, commandName, args) {
@@ -65,7 +65,7 @@ async function handleStandaloneBpCommands(message, commandName, args) {
     if (!bpCommands.includes(commandName)) return false;
 
     if (!isAdministrator(message.member)) {
-        await message.reply('❌ Você precisa ser administrador para usar os comandos de bate-ponto.')
+        await message.reply('❌ You need administrator permission to use the time tracking commands.')
             .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
             .catch(() => {});
         await message.delete().catch(() => {});
@@ -74,25 +74,25 @@ async function handleStandaloneBpCommands(message, commandName, args) {
 
     if (commandName === 'listabp') {
         const config = getGuildPointConfig(message.guild.id);
-        const { canais, categorias } = formatPointConfig(config);
+        const { channels, categories } = formatPointConfig(config);
 
         const embed = new EmbedBuilder()
             .setColor('#2B2D31')
-            .setTitle('📋 CONFIGURAÇÃO DO BATE-PONTO')
+            .setTitle('📋 TIME TRACKING CONFIGURATION')
             .addFields(
                 {
-                    name: 'CANAIS LIBERADOS',
-                    value: canais,
+                    name: 'ALLOWED CHANNELS',
+                    value: channels,
                     inline: false
                 },
                 {
-                    name: 'CATEGORIAS LIBERADAS',
-                    value: categorias,
+                    name: 'ALLOWED CATEGORIES',
+                    value: categories,
                     inline: false
                 }
             )
             .setFooter({
-                text: `Solicitado por ${message.author.tag}`
+                text: `Requested by ${message.author.tag}`
             });
 
         await message.reply({ embeds: [embed] })
@@ -106,7 +106,7 @@ async function handleStandaloneBpCommands(message, commandName, args) {
 
     if (!value) {
         await message.reply(
-            `❌ Use assim:\n` +
+            `❌ Use like this:\n` +
             `\`${PREFIX}addcanal <id>\`\n` +
             `\`${PREFIX}removecanal <id>\`\n` +
             `\`${PREFIX}addcategoria <id>\`\n` +
@@ -118,7 +118,7 @@ async function handleStandaloneBpCommands(message, commandName, args) {
     }
 
     if (!/^\d+$/.test(value)) {
-        await message.reply('❌ O ID informado é inválido. Envie apenas números.')
+        await message.reply('❌ Invalid ID. Send numbers only.')
             .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
             .catch(() => {});
         await message.delete().catch(() => {});
@@ -129,7 +129,7 @@ async function handleStandaloneBpCommands(message, commandName, args) {
         const channel = message.guild.channels.cache.get(value);
 
         if (!channel) {
-            await message.reply('❌ Não encontrei um canal com esse ID neste servidor.')
+            await message.reply('❌ I could not find a channel with that ID in this server.')
                 .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
                 .catch(() => {});
             await message.delete().catch(() => {});
@@ -137,7 +137,7 @@ async function handleStandaloneBpCommands(message, commandName, args) {
         }
 
         if (channel.type !== ChannelType.GuildVoice) {
-            await message.reply('❌ Esse ID não pertence a um canal de voz.')
+            await message.reply('❌ This ID does not belong to a voice channel.')
                 .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
                 .catch(() => {});
             await message.delete().catch(() => {});
@@ -146,7 +146,7 @@ async function handleStandaloneBpCommands(message, commandName, args) {
 
         addAllowedChannel(message.guild.id, value);
 
-        await message.reply(`✅ Canal liberado para o bate-ponto: ${channel} (\`${channel.id}\`)`)
+        await message.reply(`✅ Allowed voice channel added for time tracking: ${channel} (\`${channel.id}\`)`)
             .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
             .catch(() => {});
         await message.delete().catch(() => {});
@@ -156,7 +156,7 @@ async function handleStandaloneBpCommands(message, commandName, args) {
     if (commandName === 'removecanal') {
         removeAllowedChannel(message.guild.id, value);
 
-        await message.reply(`✅ Canal removido da lista do bate-ponto: \`${value}\``)
+        await message.reply(`✅ Voice channel removed from time tracking list: \`${value}\``)
             .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
             .catch(() => {});
         await message.delete().catch(() => {});
@@ -167,7 +167,7 @@ async function handleStandaloneBpCommands(message, commandName, args) {
         const channel = message.guild.channels.cache.get(value);
 
         if (!channel) {
-            await message.reply('❌ Não encontrei uma categoria com esse ID neste servidor.')
+            await message.reply('❌ I could not find a category with that ID in this server.')
                 .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
                 .catch(() => {});
             await message.delete().catch(() => {});
@@ -175,7 +175,7 @@ async function handleStandaloneBpCommands(message, commandName, args) {
         }
 
         if (channel.type !== ChannelType.GuildCategory) {
-            await message.reply('❌ Esse ID não pertence a uma categoria.')
+            await message.reply('❌ This ID does not belong to a category.')
                 .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
                 .catch(() => {});
             await message.delete().catch(() => {});
@@ -184,7 +184,7 @@ async function handleStandaloneBpCommands(message, commandName, args) {
 
         addAllowedCategory(message.guild.id, value);
 
-        await message.reply(`✅ Categoria liberada para o bate-ponto: **${channel.name}** (\`${channel.id}\`)`)
+        await message.reply(`✅ Allowed category added for time tracking: **${channel.name}** (\`${channel.id}\`)`)
             .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
             .catch(() => {});
         await message.delete().catch(() => {});
@@ -194,7 +194,7 @@ async function handleStandaloneBpCommands(message, commandName, args) {
     if (commandName === 'removecategoria') {
         removeAllowedCategory(message.guild.id, value);
 
-        await message.reply(`✅ Categoria removida da lista do bate-ponto: \`${value}\``)
+        await message.reply(`✅ Category removed from time tracking list: \`${value}\``)
             .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
             .catch(() => {});
         await message.delete().catch(() => {});

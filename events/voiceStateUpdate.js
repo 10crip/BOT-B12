@@ -21,7 +21,8 @@ function msToReadable(ms) {
 
 function isTrackedChannel(channel) {
     if (!channel) return false;
-    return ALLOWED_CATEGORY_IDS.includes(channel.parentId);
+    const parentId = channel.parentId || channel.parent?.id || null;
+    return ALLOWED_CATEGORY_IDS.includes(parentId);
 }
 
 function formatDateTime(date) {
@@ -55,9 +56,6 @@ module.exports = {
 
         const timerKey = `${guild.id}:${userId}`;
 
-        // ==================================================
-        // MOVIMENTO ENTRE CALLS VÁLIDAS
-        // ==================================================
         if (oldValid && newValid) {
             updateUserPoint(guild.id, userId, {
                 voiceChannelId: newState.channel.id,
@@ -72,9 +70,6 @@ module.exports = {
             return;
         }
 
-        // ==================================================
-        // SAIU DE CALL VÁLIDA
-        // ==================================================
         if (oldValid && !newValid) {
             let accumulated = point.accumulatedMsCurrent || 0;
 
@@ -154,9 +149,6 @@ module.exports = {
             return;
         }
 
-        // ==================================================
-        // VOLTOU PARA CALL VÁLIDA
-        // ==================================================
         if (!oldValid && newValid) {
             updateUserPoint(guild.id, userId, {
                 voiceJoinedAt: Date.now(),

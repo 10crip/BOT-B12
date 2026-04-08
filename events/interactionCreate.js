@@ -11,7 +11,6 @@ const { getGuildConfig } = require('../guildConfig');
 const { setSession, getSession, updateSession } = require('../utils/transferSessions');
 
 const PAINEL_TRANSFERENCIA_CHANNEL_ID = '1491220519494619227';
-const REVISAO_TRANSFERENCIA_CHANNEL_ID = '1491244658448273550';
 const CARGO_APROVADO_TRANSFERENCIA_ID = '1491257490594332712';
 
 const QUESTIONS = [
@@ -212,8 +211,14 @@ module.exports = {
 
             if (userId) {
                 const membro = await interaction.guild.members.fetch(userId).catch(() => null);
+
                 if (membro) {
                     await membro.roles.add(CARGO_APROVADO_TRANSFERENCIA_ID).catch(() => {});
+
+                    await membro.send(
+                        `✅ Sua transferência foi **ACEITA** em **${interaction.guild.name}**.\n` +
+                        `👤 Responsável: **${interaction.user.tag}**`
+                    ).catch(() => {});
                 }
             }
 
@@ -260,6 +265,15 @@ module.exports = {
             const match = footerText.match(/Canal: (\d+)/);
             const transferChannelId = match ? match[1] : null;
 
+            let userId = null;
+            const userField = embedAtual.fields?.find(field => field.name === 'USUÁRIO');
+            if (userField?.value) {
+                const userMatch = userField.value.match(/<@!?(\d+)>/);
+                if (userMatch) {
+                    userId = userMatch[1];
+                }
+            }
+
             const novosCampos = (embedAtual.fields || []).filter(
                 field => field.name !== 'STATUS' && field.name !== 'RESPONSÁVEL'
             );
@@ -298,6 +312,17 @@ module.exports = {
                 embeds: [embedNovo],
                 components: [disabledRow]
             });
+
+            if (userId) {
+                const membro = await interaction.guild.members.fetch(userId).catch(() => null);
+
+                if (membro) {
+                    await membro.send(
+                        `❌ Sua transferência foi **RECUSADA** em **${interaction.guild.name}**.\n` +
+                        `👤 Responsável: **${interaction.user.tag}**`
+                    ).catch(() => {});
+                }
+            }
 
             if (transferChannelId) {
                 const canal = interaction.guild.channels.cache.get(transferChannelId);

@@ -3,16 +3,17 @@ const {
 } = require('discord.js');
 
 const { getGuildConfig } = require('../guildConfig');
-const { getUserPoint, updateUserPoint, closeUserPoint, getTop10 } = require('../utils/batePonto');
+const {
+    getUserPoint,
+    updateUserPoint,
+    closeUserPoint,
+    getTop10,
+    getTrackedVoiceInfo
+} = require('../utils/batePonto');
 
 const PANEL_CHANNEL_ID = '1474852514359803993';
 const LOG_CHANNEL_ID = '1479264100503523522';
 const RANK_CHANNEL_ID = '1491293762180354159';
-
-const ALLOWED_CATEGORY_IDS = [
-    '1474852514787758188',
-    '1478043522279145572'
-];
 
 function msToReadable(ms) {
     const totalSeconds = Math.floor(ms / 1000);
@@ -21,14 +22,6 @@ function msToReadable(ms) {
     const segundos = totalSeconds % 60;
 
     return `${horas}h ${minutos}m ${segundos}s`;
-}
-
-function isValidVoice(member) {
-    const voiceChannel = member?.voice?.channel;
-    if (!voiceChannel) return false;
-
-    const parentId = voiceChannel.parentId || voiceChannel.parent?.id || null;
-    return ALLOWED_CATEGORY_IDS.includes(parentId);
 }
 
 function formatDateTime(date) {
@@ -70,16 +63,24 @@ module.exports = {
                 });
             }
 
-            const parentId = currentVoice.parentId || currentVoice.parent?.id || null;
+            const voiceInfo = getTrackedVoiceInfo(interaction.guild.id, currentVoice);
 
-            if (!ALLOWED_CATEGORY_IDS.includes(parentId)) {
+            if (!voiceInfo.valid) {
+                const canaisPermitidosTexto = voiceInfo.allowedChannelIds.length
+                    ? voiceInfo.allowedChannelIds.map(id => `\`${id}\``).join('\n')
+                    : '`nenhum canal configurado`';
+
+                const categoriasPermitidasTexto = voiceInfo.allowedCategoryIds.length
+                    ? voiceInfo.allowedCategoryIds.map(id => `\`${id}\``).join('\n')
+                    : '`nenhuma categoria configurada`';
+
                 return interaction.reply({
                     content:
-                        `❌ Para iniciar o bate-ponto, você precisa estar em uma call válida das categorias permitidas.\n\n` +
-                        `📁 Categoria detectada: \`${parentId || 'nenhuma'}\`\n` +
-                        `📁 Categorias permitidas:\n` +
-                        `\`1474852514787758188\`\n` +
-                        `\`1478043522279145572\``,
+                        `❌ Para iniciar o bate-ponto, você precisa estar em uma call válida configurada no sistema.\n\n` +
+                        `🔎 Canal detectado: \`${voiceInfo.channelId || 'nenhum'}\`\n` +
+                        `📁 Categoria detectada: \`${voiceInfo.parentId || 'nenhuma'}\`\n\n` +
+                        `✅ Canais permitidos:\n${canaisPermitidosTexto}\n\n` +
+                        `✅ Categorias permitidas:\n${categoriasPermitidasTexto}`,
                     ephemeral: true
                 });
             }
@@ -123,7 +124,12 @@ module.exports = {
                     },
                     {
                         name: 'CATEGORIA',
-                        value: `\`${parentId}\``,
+                        value: `\`${voiceInfo.parentId || 'sem categoria'}\``,
+                        inline: false
+                    },
+                    {
+                        name: 'VALIDADO POR',
+                        value: voiceInfo.matchedBy === 'channel' ? 'Canal permitido' : 'Categoria permitida',
                         inline: false
                     },
                     {

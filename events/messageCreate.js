@@ -12,7 +12,7 @@ const { getSession, updateSession, deleteSession } = require('../utils/transferS
 const { getPendingAdv, deletePendingAdv } = require('../utils/pendingAdv');
 const { getPendingRank, deletePendingRank } = require('../utils/pendingRank');
 const { getGuildConfig } = require('../guildConfig');
-const { getUserWarnings, addWarning } = require('../utils/advertencias');
+const { addWarning } = require('../utils/advertencias');
 const {
     addAllowedChannel,
     removeAllowedChannel,
@@ -59,10 +59,10 @@ function formatPointConfig(config) {
     return { canais, categorias };
 }
 
-async function handleBpCommand(message, args) {
-    if (!message.guild) return false;
-    if (!args.length) return false;
-    if (args[0].toLowerCase() !== 'bp') return false;
+async function handleStandaloneBpCommands(message, commandName, args) {
+    const bpCommands = ['addcanal', 'removecanal', 'addcategoria', 'removecategoria', 'listabp'];
+
+    if (!bpCommands.includes(commandName)) return false;
 
     if (!isAdministrator(message.member)) {
         await message.reply('❌ Você precisa ser administrador para usar os comandos de bate-ponto.')
@@ -72,26 +72,7 @@ async function handleBpCommand(message, args) {
         return true;
     }
 
-    const action = (args[1] || '').toLowerCase();
-    const value = args[2];
-
-    const usage =
-        `❌ Use assim:\n` +
-        `\`${PREFIX}bp addcanal <id>\`\n` +
-        `\`${PREFIX}bp removecanal <id>\`\n` +
-        `\`${PREFIX}bp addcategoria <id>\`\n` +
-        `\`${PREFIX}bp removecategoria <id>\`\n` +
-        `\`${PREFIX}bp lista\``;
-
-    if (!action) {
-        await message.reply(usage)
-            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
-            .catch(() => {});
-        await message.delete().catch(() => {});
-        return true;
-    }
-
-    if (action === 'lista') {
+    if (commandName === 'listabp') {
         const config = getGuildPointConfig(message.guild.id);
         const { canais, categorias } = formatPointConfig(config);
 
@@ -121,10 +102,17 @@ async function handleBpCommand(message, args) {
         return true;
     }
 
+    const value = args[0];
+
     if (!value) {
-        await message.reply(usage)
-            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
-            .catch(() => {});
+        await message.reply(
+            `❌ Use assim:\n` +
+            `\`${PREFIX}addcanal <id>\`\n` +
+            `\`${PREFIX}removecanal <id>\`\n` +
+            `\`${PREFIX}addcategoria <id>\`\n` +
+            `\`${PREFIX}removecategoria <id>\`\n` +
+            `\`${PREFIX}listabp\``
+        ).then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000)).catch(() => {});
         await message.delete().catch(() => {});
         return true;
     }
@@ -137,7 +125,7 @@ async function handleBpCommand(message, args) {
         return true;
     }
 
-    if (action === 'addcanal') {
+    if (commandName === 'addcanal') {
         const channel = message.guild.channels.cache.get(value);
 
         if (!channel) {
@@ -165,7 +153,7 @@ async function handleBpCommand(message, args) {
         return true;
     }
 
-    if (action === 'removecanal') {
+    if (commandName === 'removecanal') {
         removeAllowedChannel(message.guild.id, value);
 
         await message.reply(`✅ Canal removido da lista do bate-ponto: \`${value}\``)
@@ -175,7 +163,7 @@ async function handleBpCommand(message, args) {
         return true;
     }
 
-    if (action === 'addcategoria') {
+    if (commandName === 'addcategoria') {
         const channel = message.guild.channels.cache.get(value);
 
         if (!channel) {
@@ -203,7 +191,7 @@ async function handleBpCommand(message, args) {
         return true;
     }
 
-    if (action === 'removecategoria') {
+    if (commandName === 'removecategoria') {
         removeAllowedCategory(message.guild.id, value);
 
         await message.reply(`✅ Categoria removida da lista do bate-ponto: \`${value}\``)
@@ -213,11 +201,7 @@ async function handleBpCommand(message, args) {
         return true;
     }
 
-    await message.reply(usage)
-        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
-        .catch(() => {});
-    await message.delete().catch(() => {});
-    return true;
+    return false;
 }
 
 async function aplicarMudancaDeCargo(message, pendingRank) {
@@ -541,9 +525,6 @@ module.exports = {
         if (!message.guild) return;
         if (message.author.bot) return;
 
-        // ==================================================
-        // RESPOSTA DE PROMOÇÃO / REBAIXAMENTO
-        // ==================================================
         {
             const pendingKey = `${message.guild.id}:${message.channel.id}:${message.author.id}`;
             const pendingRank = getPendingRank(pendingKey);
@@ -578,9 +559,6 @@ module.exports = {
             }
         }
 
-        // ==================================================
-        // CONFIRMAÇÃO DE ADVERTÊNCIA
-        // ==================================================
         if (message.content.toLowerCase().trim() === 'confirmar') {
             const pendingKey = `${message.guild.id}:${message.channel.id}:${message.author.id}`;
             const pendingAdv = getPendingAdv(pendingKey);
@@ -614,9 +592,6 @@ module.exports = {
             }
         }
 
-        // ==================================================
-        // SISTEMA DE TRANSFERÊNCIA
-        // ==================================================
         const session = getSession(message.channel.id);
 
         if (session && session.type === 'transferencia' && session.status === 'collecting') {
@@ -728,9 +703,6 @@ module.exports = {
             return;
         }
 
-        // ==================================================
-        // COMANDOS
-        // ==================================================
         if (!message.content.startsWith(PREFIX)) return;
 
         const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
@@ -738,10 +710,8 @@ module.exports = {
 
         if (!commandName) return;
 
-        if (commandName === 'bp') {
-            const handled = await handleBpCommand(message, ['bp', ...args]);
-            if (handled) return;
-        }
+        const handledBp = await handleStandaloneBpCommands(message, commandName, args);
+        if (handledBp) return;
 
         const command = client.commands.get(commandName);
         if (!command) return;

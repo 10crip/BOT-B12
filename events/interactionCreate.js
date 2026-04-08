@@ -4,7 +4,10 @@ const {
     EmbedBuilder,
     ActionRowBuilder,
     ButtonBuilder,
-    ButtonStyle
+    ButtonStyle,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
 } = require('discord.js');
 
 const { getGuildConfig } = require('../guildConfig');
@@ -12,6 +15,17 @@ const { setSession, getSession, updateSession } = require('../utils/transferSess
 
 const PAINEL_TRANSFERENCIA_CHANNEL_ID = '1491220519494619227';
 const CARGO_APROVADO_TRANSFERENCIA_ID = '1491257490594332712';
+const REGISTRO_PANEL_CHANNEL_ID = '1491264478224973865';
+
+const REGISTRO_REMOVE_ROLE_IDS = [
+    '1491257490594332712',
+    '1474852513466421504'
+];
+
+const REGISTRO_ADD_ROLE_IDS = [
+    '1474852513436930182',
+    '1474852513466421510'
+];
 
 const QUESTIONS = [
     '1 - QUAL SEU NOME NA CIDADE?',
@@ -29,6 +43,89 @@ module.exports = {
     name: 'interactionCreate',
 
     async execute(interaction) {
+        // ==================================================
+        // BOTÃO DO PAINEL DE REGISTRO
+        // ==================================================
+        if (interaction.isButton() && interaction.customId === 'abrir_registro') {
+            if (interaction.channelId !== REGISTRO_PANEL_CHANNEL_ID) {
+                return interaction.reply({
+                    content: '❌ Este botão só pode ser usado no painel oficial de registro.',
+                    ephemeral: true
+                });
+            }
+
+            const modal = new ModalBuilder()
+                .setCustomId('submit_registro')
+                .setTitle('Criar seu registro');
+
+            const nomeInput = new TextInputBuilder()
+                .setCustomId('registro_nome_city')
+                .setLabel('QUAL SEU NOME NA CITY?')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(true)
+                .setPlaceholder('Ex: Kauã, Barbosa, Duozin');
+
+            const idInput = new TextInputBuilder()
+                .setCustomId('registro_id_city')
+                .setLabel('QUAL O SEU ID?')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(true)
+                .setPlaceholder('Ex: 123, 456, 999');
+
+            const row1 = new ActionRowBuilder().addComponents(nomeInput);
+            const row2 = new ActionRowBuilder().addComponents(idInput);
+
+            modal.addComponents(row1, row2);
+
+            return interaction.showModal(modal);
+        }
+
+        // ==================================================
+        // ENVIO DO FORMULÁRIO DE REGISTRO
+        // ==================================================
+        if (interaction.isModalSubmit() && interaction.customId === 'submit_registro') {
+            const nomeCity = interaction.fields.getTextInputValue('registro_nome_city').trim();
+            const idCity = interaction.fields.getTextInputValue('registro_id_city').trim();
+
+            const membro = interaction.member;
+
+            try {
+                for (const roleId of REGISTRO_REMOVE_ROLE_IDS) {
+                    if (membro.roles.cache.has(roleId)) {
+                        await membro.roles.remove(roleId).catch(() => {});
+                    }
+                }
+
+                for (const roleId of REGISTRO_ADD_ROLE_IDS) {
+                    if (!membro.roles.cache.has(roleId)) {
+                        await membro.roles.add(roleId).catch(() => {});
+                    }
+                }
+
+                const novoApelido = `B12 | ${nomeCity} #${idCity}`;
+                await membro.setNickname(novoApelido).catch(() => {});
+
+                return interaction.reply({
+                    content:
+                        `✅ Seu registro foi concluído com sucesso.\n\n` +
+                        `**Nome na city:** ${nomeCity}\n` +
+                        `**ID:** ${idCity}\n` +
+                        `**Apelido definido para:** \`${novoApelido}\``,
+                    ephemeral: true
+                });
+            } catch (error) {
+                console.error('❌ Erro ao concluir registro:', error);
+
+                return interaction.reply({
+                    content: '❌ Ocorreu um erro ao concluir seu registro.',
+                    ephemeral: true
+                });
+            }
+        }
+
+        // ==================================================
+        // BOTÃO DE ABRIR TRANSFERÊNCIA
+        // ==================================================
         if (interaction.isButton() && interaction.customId === 'abrir_transferencia') {
             if (interaction.channelId !== PAINEL_TRANSFERENCIA_CHANNEL_ID) {
                 return interaction.reply({
@@ -136,6 +233,9 @@ module.exports = {
             });
         }
 
+        // ==================================================
+        // APROVAR TRANSFERÊNCIA
+        // ==================================================
         if (interaction.isButton() && interaction.customId === 'aprovar_transferencia') {
             const guildConfig = getGuildConfig(interaction.guild.id);
             const admRecRoleIds = guildConfig.admRecRoleIds || [];
@@ -240,6 +340,9 @@ module.exports = {
             return;
         }
 
+        // ==================================================
+        // RECUSAR TRANSFERÊNCIA
+        // ==================================================
         if (interaction.isButton() && interaction.customId === 'recusar_transferencia') {
             const guildConfig = getGuildConfig(interaction.guild.id);
             const admRecRoleIds = guildConfig.admRecRoleIds || [];

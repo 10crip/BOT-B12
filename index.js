@@ -10,6 +10,7 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildVoiceStates,
         GatewayIntentBits.DirectMessages
     ],
     partials: [Partials.Channel]
@@ -27,14 +28,14 @@ if (fs.existsSync(commandsPath)) {
             const command = require(path.join(commandsPath, file));
 
             if (!command || !command.name || typeof command.execute !== 'function') {
-                console.log(`⚠️ Comando ignorado: ${file}`);
+                console.log(`⚠️ Command ignored: ${file}`);
                 continue;
             }
 
             client.commands.set(command.name, command);
-            console.log(`✅ Comando carregado: ${command.name}`);
+            console.log(`✅ Command loaded: ${command.name}`);
         } catch (error) {
-            console.error(`❌ Erro ao carregar comando ${file}:`, error);
+            console.error(`❌ Error loading command ${file}:`, error);
         }
     }
 }
@@ -49,7 +50,7 @@ if (fs.existsSync(eventsPath)) {
             const event = require(path.join(eventsPath, file));
 
             if (!event || !event.name || typeof event.execute !== 'function') {
-                console.log(`⚠️ Evento ignorado: ${file}`);
+                console.log(`⚠️ Event ignored: ${file}`);
                 continue;
             }
 
@@ -59,9 +60,9 @@ if (fs.existsSync(eventsPath)) {
                 client.on(event.name, (...args) => event.execute(...args, client));
             }
 
-            console.log(`📡 Evento carregado: ${file} -> ${event.name}`);
+            console.log(`📡 Event loaded: ${file} -> ${event.name}`);
         } catch (error) {
-            console.error(`❌ Erro ao carregar evento ${file}:`, error);
+            console.error(`❌ Error loading event ${file}:`, error);
         }
     }
 }
@@ -75,5 +76,5 @@ process.on('uncaughtException', error => {
 });
 
 client.login(process.env.TOKEN).catch(error => {
-    console.error('❌ Erro ao conectar o bot:', error);
+    console.error('❌ Error connecting the bot:', error);
 });

@@ -5,8 +5,6 @@ const {
     StringSelectMenuOptionBuilder
 } = require('discord.js');
 
-const PREFIX = process.env.PREFIX || '!';
-
 module.exports = {
     name: 'painelticket',
 
@@ -24,7 +22,7 @@ module.exports = {
                 '• **Proposta de parcerias.**'
             )
             .setThumbnail('https://via.placeholder.com/128x128.png?text=B12')
-            .setImage('https://via.placeholder.com/700x200.png?text=B12');
+            .setImage('https://via.placeholder.com/700x200.png?text=ATENDIMENTO+B12');
 
         const menu = new StringSelectMenuBuilder()
             .setCustomId('ticket_select')

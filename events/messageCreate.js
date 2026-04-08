@@ -7,7 +7,7 @@ const {
 
 const PREFIX = process.env.PREFIX || '!';
 
-const { getSession, updateSession } = require('../utils/transferSessions');
+const { getSession, updateSession, deleteSession } = require('../utils/transferSessions');
 
 const REVISAO_TRANSFERENCIA_CHANNEL_ID = '1491244658448273550';
 
@@ -123,7 +123,16 @@ module.exports = {
                 components: [row]
             });
 
-            await message.channel.send('✅ Suas respostas foram enviadas para análise.');
+            await message.channel.send(
+                '✅ Suas respostas foram enviadas para análise. Agora é só aguardar um recrutador aceitar sua transferência.\n\n' +
+                '🗑️ Este canal será apagado em 10 segundos.'
+            );
+
+            setTimeout(async () => {
+                deleteSession(message.channel.id);
+                await message.channel.delete().catch(() => {});
+            }, 10000);
+
             return;
         }
 

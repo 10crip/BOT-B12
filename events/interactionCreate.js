@@ -12,6 +12,7 @@ const { setSession, getSession, updateSession } = require('../utils/transferSess
 
 const PAINEL_TRANSFERENCIA_CHANNEL_ID = '1491220519494619227';
 const REVISAO_TRANSFERENCIA_CHANNEL_ID = '1491244658448273550';
+const CARGO_APROVADO_TRANSFERENCIA_ID = '1491257490594332712';
 
 const QUESTIONS = [
     '1 - QUAL SEU NOME NA CIDADE?',
@@ -23,11 +24,6 @@ const QUESTIONS = [
 function hasAnyConfiguredRole(member, roleIds) {
     if (!Array.isArray(roleIds) || !roleIds.length) return false;
     return roleIds.some(roleId => member.roles.cache.has(roleId));
-}
-
-function buildRoleMentions(roleIds) {
-    if (!Array.isArray(roleIds) || !roleIds.length) return '';
-    return roleIds.map(roleId => `<@&${roleId}>`).join(' ');
 }
 
 module.exports = {
@@ -166,20 +162,35 @@ module.exports = {
             const match = footerText.match(/Canal: (\d+)/);
             const transferChannelId = match ? match[1] : null;
 
+            let userId = null;
+            const userField = embedAtual.fields?.find(field => field.name === 'USUÁRIO');
+            if (userField?.value) {
+                const userMatch = userField.value.match(/<@!?(\d+)>/);
+                if (userMatch) {
+                    userId = userMatch[1];
+                }
+            }
+
+            const novosCampos = (embedAtual.fields || []).filter(
+                field => field.name !== 'STATUS' && field.name !== 'RESPONSÁVEL'
+            );
+
+            novosCampos.push(
+                {
+                    name: 'STATUS',
+                    value: 'APROVADA',
+                    inline: true
+                },
+                {
+                    name: 'RESPONSÁVEL',
+                    value: `${interaction.user}`,
+                    inline: true
+                }
+            );
+
             const embedNovo = EmbedBuilder.from(embedAtual)
                 .setColor('#2B2D31')
-                .addFields(
-                    {
-                        name: 'STATUS',
-                        value: 'APROVADA',
-                        inline: true
-                    },
-                    {
-                        name: 'RESPONSÁVEL',
-                        value: `${interaction.user}`,
-                        inline: true
-                    }
-                );
+                .setFields(novosCampos);
 
             const disabledRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
@@ -199,6 +210,13 @@ module.exports = {
                 components: [disabledRow]
             });
 
+            if (userId) {
+                const membro = await interaction.guild.members.fetch(userId).catch(() => null);
+                if (membro) {
+                    await membro.roles.add(CARGO_APROVADO_TRANSFERENCIA_ID).catch(() => {});
+                }
+            }
+
             if (transferChannelId) {
                 const canal = interaction.guild.channels.cache.get(transferChannelId);
                 if (canal) {
@@ -213,6 +231,8 @@ module.exports = {
                     });
                 }
             }
+
+            return;
         }
 
         if (interaction.isButton() && interaction.customId === 'recusar_transferencia') {
@@ -240,20 +260,26 @@ module.exports = {
             const match = footerText.match(/Canal: (\d+)/);
             const transferChannelId = match ? match[1] : null;
 
+            const novosCampos = (embedAtual.fields || []).filter(
+                field => field.name !== 'STATUS' && field.name !== 'RESPONSÁVEL'
+            );
+
+            novosCampos.push(
+                {
+                    name: 'STATUS',
+                    value: 'RECUSADA',
+                    inline: true
+                },
+                {
+                    name: 'RESPONSÁVEL',
+                    value: `${interaction.user}`,
+                    inline: true
+                }
+            );
+
             const embedNovo = EmbedBuilder.from(embedAtual)
                 .setColor('#2B2D31')
-                .addFields(
-                    {
-                        name: 'STATUS',
-                        value: 'RECUSADA',
-                        inline: true
-                    },
-                    {
-                        name: 'RESPONSÁVEL',
-                        value: `${interaction.user}`,
-                        inline: true
-                    }
-                );
+                .setFields(novosCampos);
 
             const disabledRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
@@ -287,6 +313,8 @@ module.exports = {
                     });
                 }
             }
+
+            return;
         }
     }
 };

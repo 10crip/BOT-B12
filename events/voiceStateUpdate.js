@@ -3,10 +3,11 @@ const {
     getUserPoint,
     updateUserPoint,
     closeUserPoint,
-    isTrackedVoiceChannel
+    getTrackedVoiceInfo
 } = require('../utils/batePonto');
 
 const LOG_CHANNEL_ID = '1479264100503523522';
+const AUTO_CLOSE_DELAY = 90 * 1000;
 
 const awayTimers = new Map();
 
@@ -32,6 +33,13 @@ async function sendLog(guild, embed) {
     await channel.send({ embeds: [embed] }).catch(() => {});
 }
 
+function clearAwayTimer(timerKey) {
+    if (awayTimers.has(timerKey)) {
+        clearTimeout(awayTimers.get(timerKey));
+        awayTimers.delete(timerKey);
+    }
+}
+
 module.exports = {
     name: 'voiceStateUpdate',
 
@@ -45,25 +53,26 @@ module.exports = {
 
         if (!point.active) return;
 
-        const oldValid = isTrackedVoiceChannel(guild.id, oldState.channel);
-        const newValid = isTrackedVoiceChannel(guild.id, newState.channel);
+        const oldInfo = getTrackedVoiceInfo(guild.id, oldState.channel);
+        const newInfo = getTrackedVoiceInfo(guild.id, newState.channel);
+
+        const oldValid = oldInfo.valid;
+        const newValid = newInfo.valid;
 
         const timerKey = `${guild.id}:${userId}`;
 
+        // Continua em canal permitido ou moveu entre canais permitidos
         if (oldValid && newValid) {
             updateUserPoint(guild.id, userId, {
-                voiceChannelId: newState.channel.id,
+                voiceChannelId: newState.channel?.id || null,
                 awaySince: null
             });
 
-            if (awayTimers.has(timerKey)) {
-                clearTimeout(awayTimers.get(timerKey));
-                awayTimers.delete(timerKey);
-            }
-
+            clearAwayTimer(timerKey);
             return;
         }
 
+        // Saiu de um canal permitido para canal inválido ou desconectou
         if (oldValid && !newValid) {
             let accumulated = point.accumulatedMsCurrent || 0;
 
@@ -78,16 +87,37 @@ module.exports = {
                 voiceChannelId: null
             });
 
-            if (awayTimers.has(timerKey)) {
-                clearTimeout(awayTimers.get(timerKey));
-                awayTimers.delete(timerKey);
-            }
+            clearAwayTimer(timerKey);
 
             const timeout = setTimeout(async () => {
                 const currentPoint = getUserPoint(guild.id, userId);
 
-                if (!currentPoint.active) return;
-                if (!currentPoint.awaySince) return;
+                if (!currentPoint.active) {
+                    awayTimers.delete(timerKey);
+                    return;
+                }
+
+                if (!currentPoint.awaySince) {
+                    awayTimers.delete(timerKey);
+                    return;
+                }
+
+                const memberNow = guild.members.cache.get(userId) || await guild.members.fetch(userId).catch(() => null);
+                const currentVoiceChannel = memberNow?.voice?.channel || null;
+                const currentVoiceInfo = getTrackedVoiceInfo(guild.id, currentVoiceChannel);
+
+                // Se voltou para uma call válida antes do tempo acabar, cancela o fechamento
+                if (currentVoiceInfo.valid) {
+                    updateUserPoint(guild.id, userId, {
+                        voiceJoinedAt: Date.now(),
+                        awaySince: null,
+                        voiceChannelId: currentVoiceChannel.id,
+                        memberTag: member.user.tag
+                    });
+
+                    awayTimers.delete(timerKey);
+                    return;
+                }
 
                 const sessionMs = currentPoint.accumulatedMsCurrent || 0;
                 closeUserPoint(guild.id, userId, sessionMs);
@@ -135,12 +165,13 @@ module.exports = {
                     `Reason: you stayed more than 1 minute and 30 seconds outside an allowed voice channel.\n` +
                     `Tracked time: **${msToReadable(sessionMs)}**`
                 ).catch(() => {});
-            }, 90000);
+            }, AUTO_CLOSE_DELAY);
 
             awayTimers.set(timerKey, timeout);
             return;
         }
 
+        // Voltou para um canal permitido
         if (!oldValid && newValid) {
             updateUserPoint(guild.id, userId, {
                 voiceJoinedAt: Date.now(),
@@ -149,10 +180,7 @@ module.exports = {
                 memberTag: member.user.tag
             });
 
-            if (awayTimers.has(timerKey)) {
-                clearTimeout(awayTimers.get(timerKey));
-                awayTimers.delete(timerKey);
-            }
+            clearAwayTimer(timerKey);
         }
     }
 };

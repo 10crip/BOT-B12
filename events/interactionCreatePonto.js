@@ -24,9 +24,11 @@ function msToReadable(ms) {
 }
 
 function isValidVoice(member) {
-    const voiceChannel = member.voice?.channel;
+    const voiceChannel = member?.voice?.channel;
     if (!voiceChannel) return false;
-    return ALLOWED_CATEGORY_IDS.includes(voiceChannel.parentId);
+
+    const parentId = voiceChannel.parentId || voiceChannel.parent?.id || null;
+    return ALLOWED_CATEGORY_IDS.includes(parentId);
 }
 
 function formatDateTime(date) {
@@ -59,9 +61,25 @@ module.exports = {
                 });
             }
 
-            if (!isValidVoice(interaction.member)) {
+            const currentVoice = interaction.member.voice.channel;
+
+            if (!currentVoice) {
                 return interaction.reply({
-                    content: '❌ Para iniciar o bate-ponto, você precisa estar em uma call válida das categorias permitidas.',
+                    content: '❌ Você precisa estar conectado em uma call para iniciar o bate-ponto.',
+                    ephemeral: true
+                });
+            }
+
+            const parentId = currentVoice.parentId || currentVoice.parent?.id || null;
+
+            if (!ALLOWED_CATEGORY_IDS.includes(parentId)) {
+                return interaction.reply({
+                    content:
+                        `❌ Para iniciar o bate-ponto, você precisa estar em uma call válida das categorias permitidas.\n\n` +
+                        `📁 Categoria detectada: \`${parentId || 'nenhuma'}\`\n` +
+                        `📁 Categorias permitidas:\n` +
+                        `\`1474852514787758188\`\n` +
+                        `\`1478043522279145572\``,
                     ephemeral: true
                 });
             }
@@ -76,13 +94,14 @@ module.exports = {
             }
 
             const now = Date.now();
+
             updateUserPoint(interaction.guild.id, interaction.user.id, {
                 active: true,
                 openedAt: now,
                 voiceJoinedAt: now,
                 accumulatedMsCurrent: 0,
                 awaySince: null,
-                voiceChannelId: interaction.member.voice.channel.id,
+                voiceChannelId: currentVoice.id,
                 memberTag: interaction.user.tag
             });
 
@@ -99,7 +118,12 @@ module.exports = {
                     },
                     {
                         name: 'CANAL DE VOZ',
-                        value: `${interaction.member.voice.channel}`,
+                        value: `${currentVoice}`,
+                        inline: false
+                    },
+                    {
+                        name: 'CATEGORIA',
+                        value: `\`${parentId}\``,
                         inline: false
                     },
                     {

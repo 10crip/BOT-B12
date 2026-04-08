@@ -22,7 +22,7 @@ function readData() {
         const raw = fs.readFileSync(filePath, 'utf8');
         return JSON.parse(raw || '{}');
     } catch (error) {
-        console.error('❌ Erro ao ler batePonto.json:', error);
+        console.error('❌ Error reading batePonto.json:', error);
         return {};
     }
 }
@@ -33,7 +33,7 @@ function saveData(data) {
     try {
         fs.writeFileSync(filePath, JSON.stringify(data, null, 4));
     } catch (error) {
-        console.error('❌ Erro ao salvar batePonto.json:', error);
+        console.error('❌ Error saving batePonto.json:', error);
     }
 }
 
@@ -51,28 +51,6 @@ function ensureGuildStructure(data, guildId) {
 
     const guildData = data[guildId];
 
-    const hasOldUserStructure = Object.prototype.hasOwnProperty.call(guildData, 'totalMs')
-        || Object.prototype.hasOwnProperty.call(guildData, 'active')
-        || Object.prototype.hasOwnProperty.call(guildData, 'openedAt')
-        || Object.prototype.hasOwnProperty.call(guildData, 'voiceJoinedAt')
-        || Object.prototype.hasOwnProperty.call(guildData, 'accumulatedMsCurrent')
-        || Object.prototype.hasOwnProperty.call(guildData, 'awaySince')
-        || Object.prototype.hasOwnProperty.call(guildData, 'voiceChannelId')
-        || Object.prototype.hasOwnProperty.call(guildData, 'memberTag');
-
-    if (hasOldUserStructure) {
-        data[guildId] = {
-            config: {
-                allowedChannelIds: [],
-                allowedCategoryIds: []
-            },
-            users: {
-                ...guildData
-            }
-        };
-        return;
-    }
-
     if (!guildData.config || typeof guildData.config !== 'object') {
         guildData.config = {
             allowedChannelIds: [],
@@ -89,9 +67,9 @@ function ensureGuildStructure(data, guildId) {
     }
 
     if (!guildData.users || typeof guildData.users !== 'object') {
-        const maybeUsers = { ...guildData };
-        delete maybeUsers.config;
-        guildData.users = maybeUsers;
+        const possibleUsers = { ...guildData };
+        delete possibleUsers.config;
+        guildData.users = possibleUsers;
     }
 }
 
@@ -116,26 +94,6 @@ function getGuildPointConfig(guildId) {
     const data = readData();
     ensureGuildStructure(data, guildId);
     saveData(data);
-
-    return data[guildId].config;
-}
-
-function setGuildPointConfig(guildId, newConfig = {}) {
-    const data = readData();
-    ensureGuildStructure(data, guildId);
-
-    const currentConfig = data[guildId].config;
-
-    data[guildId].config = {
-        allowedChannelIds: Array.isArray(newConfig.allowedChannelIds)
-            ? [...new Set(newConfig.allowedChannelIds.map(String))]
-            : currentConfig.allowedChannelIds || [],
-        allowedCategoryIds: Array.isArray(newConfig.allowedCategoryIds)
-            ? [...new Set(newConfig.allowedCategoryIds.map(String))]
-            : currentConfig.allowedCategoryIds || []
-    };
-
-    saveData(data);
     return data[guildId].config;
 }
 
@@ -144,10 +102,9 @@ function addAllowedChannel(guildId, channelId) {
     ensureGuildStructure(data, guildId);
 
     const id = String(channelId);
-    const list = data[guildId].config.allowedChannelIds;
 
-    if (!list.includes(id)) {
-        list.push(id);
+    if (!data[guildId].config.allowedChannelIds.includes(id)) {
+        data[guildId].config.allowedChannelIds.push(id);
         saveData(data);
     }
 
@@ -159,6 +116,7 @@ function removeAllowedChannel(guildId, channelId) {
     ensureGuildStructure(data, guildId);
 
     const id = String(channelId);
+
     data[guildId].config.allowedChannelIds =
         data[guildId].config.allowedChannelIds.filter(item => item !== id);
 
@@ -171,10 +129,9 @@ function addAllowedCategory(guildId, categoryId) {
     ensureGuildStructure(data, guildId);
 
     const id = String(categoryId);
-    const list = data[guildId].config.allowedCategoryIds;
 
-    if (!list.includes(id)) {
-        list.push(id);
+    if (!data[guildId].config.allowedCategoryIds.includes(id)) {
+        data[guildId].config.allowedCategoryIds.push(id);
         saveData(data);
     }
 
@@ -186,11 +143,49 @@ function removeAllowedCategory(guildId, categoryId) {
     ensureGuildStructure(data, guildId);
 
     const id = String(categoryId);
+
     data[guildId].config.allowedCategoryIds =
         data[guildId].config.allowedCategoryIds.filter(item => item !== id);
 
     saveData(data);
     return data[guildId].config;
+}
+
+function getTrackedVoiceInfo(guildId, channel) {
+    const config = getGuildPointConfig(guildId);
+
+    if (!channel) {
+        return {
+            valid: false,
+            matchedBy: null,
+            channelId: null,
+            parentId: null,
+            allowedChannelIds: config.allowedChannelIds || [],
+            allowedCategoryIds: config.allowedCategoryIds || []
+        };
+    }
+
+    const channelId = String(channel.id);
+    const parentId = String(channel.parentId || channel.parent?.id || '');
+
+    const allowedChannelIds = (config.allowedChannelIds || []).map(String);
+    const allowedCategoryIds = (config.allowedCategoryIds || []).map(String);
+
+    const byChannel = allowedChannelIds.includes(channelId);
+    const byCategory = parentId ? allowedCategoryIds.includes(parentId) : false;
+
+    return {
+        valid: byChannel || byCategory,
+        matchedBy: byChannel ? 'channel' : byCategory ? 'category' : null,
+        channelId,
+        parentId: parentId || null,
+        allowedChannelIds,
+        allowedCategoryIds
+    };
+}
+
+function isTrackedVoiceChannel(guildId, channel) {
+    return getTrackedVoiceInfo(guildId, channel).valid;
 }
 
 function getUserPoint(guildId, userId) {
@@ -233,58 +228,18 @@ function getTop10(guildId) {
     const data = readData();
     ensureGuildStructure(data, guildId);
 
-    const guildUsers = data[guildId].users || {};
-
-    return Object.entries(guildUsers)
+    return Object.entries(data[guildId].users || {})
         .map(([userId, info]) => ({
             userId,
             totalMs: info.totalMs || 0,
-            memberTag: info.memberTag || 'Desconhecido'
+            memberTag: info.memberTag || 'Unknown'
         }))
         .sort((a, b) => b.totalMs - a.totalMs)
         .slice(0, 10);
 }
 
-function getTrackedVoiceInfo(guildId, channel) {
-    const config = getGuildPointConfig(guildId);
-
-    if (!channel) {
-        return {
-            valid: false,
-            matchedBy: null,
-            channelId: null,
-            parentId: null,
-            allowedChannelIds: config.allowedChannelIds || [],
-            allowedCategoryIds: config.allowedCategoryIds || []
-        };
-    }
-
-    const channelId = String(channel.id);
-    const parentId = String(channel.parentId || channel.parent?.id || '');
-
-    const allowedChannelIds = (config.allowedChannelIds || []).map(String);
-    const allowedCategoryIds = (config.allowedCategoryIds || []).map(String);
-
-    const byChannel = allowedChannelIds.includes(channelId);
-    const byCategory = parentId ? allowedCategoryIds.includes(parentId) : false;
-
-    return {
-        valid: byChannel || byCategory,
-        matchedBy: byChannel ? 'channel' : byCategory ? 'category' : null,
-        channelId,
-        parentId: parentId || null,
-        allowedChannelIds,
-        allowedCategoryIds
-    };
-}
-
-function isTrackedVoiceChannel(guildId, channel) {
-    return getTrackedVoiceInfo(guildId, channel).valid;
-}
-
 module.exports = {
     getGuildPointConfig,
-    setGuildPointConfig,
     addAllowedChannel,
     removeAllowedChannel,
     addAllowedCategory,

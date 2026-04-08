@@ -2,7 +2,8 @@ const {
     EmbedBuilder,
     ActionRowBuilder,
     ButtonBuilder,
-    ButtonStyle
+    ButtonStyle,
+    ChannelType
 } = require('discord.js');
 
 const PREFIX = process.env.PREFIX || '!';
@@ -12,6 +13,13 @@ const { getPendingAdv, deletePendingAdv } = require('../utils/pendingAdv');
 const { getPendingRank, deletePendingRank } = require('../utils/pendingRank');
 const { getGuildConfig } = require('../guildConfig');
 const { getUserWarnings, addWarning } = require('../utils/advertencias');
+const {
+    addAllowedChannel,
+    removeAllowedChannel,
+    addAllowedCategory,
+    removeAllowedCategory,
+    getGuildPointConfig
+} = require('../utils/batePonto');
 
 const REVISAO_TRANSFERENCIA_CHANNEL_ID = '1491244658448273550';
 const ADV_LOG_CHANNEL_ID = '1474852514359803994';
@@ -33,6 +41,183 @@ function formatDateTime(date) {
     const data = date.toLocaleDateString('pt-BR');
     const hora = date.toLocaleTimeString('pt-BR');
     return { data, hora };
+}
+
+function isAdministrator(member) {
+    return member.permissions.has('Administrator');
+}
+
+function formatPointConfig(config) {
+    const canais = config.allowedChannelIds?.length
+        ? config.allowedChannelIds.map(id => `• <#${id}> (\`${id}\`)`).join('\n')
+        : '• Nenhum canal liberado';
+
+    const categorias = config.allowedCategoryIds?.length
+        ? config.allowedCategoryIds.map(id => `• \`${id}\``).join('\n')
+        : '• Nenhuma categoria liberada';
+
+    return { canais, categorias };
+}
+
+async function handleBpCommand(message, args) {
+    if (!message.guild) return false;
+    if (!args.length) return false;
+    if (args[0].toLowerCase() !== 'bp') return false;
+
+    if (!isAdministrator(message.member)) {
+        await message.reply('❌ Você precisa ser administrador para usar os comandos de bate-ponto.')
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    const action = (args[1] || '').toLowerCase();
+    const value = args[2];
+
+    const usage =
+        `❌ Use assim:\n` +
+        `\`${PREFIX}bp addcanal <id>\`\n` +
+        `\`${PREFIX}bp removecanal <id>\`\n` +
+        `\`${PREFIX}bp addcategoria <id>\`\n` +
+        `\`${PREFIX}bp removecategoria <id>\`\n` +
+        `\`${PREFIX}bp lista\``;
+
+    if (!action) {
+        await message.reply(usage)
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    if (action === 'lista') {
+        const config = getGuildPointConfig(message.guild.id);
+        const { canais, categorias } = formatPointConfig(config);
+
+        const embed = new EmbedBuilder()
+            .setColor('#2B2D31')
+            .setTitle('📋 CONFIGURAÇÃO DO BATE-PONTO')
+            .addFields(
+                {
+                    name: 'CANAIS LIBERADOS',
+                    value: canais,
+                    inline: false
+                },
+                {
+                    name: 'CATEGORIAS LIBERADAS',
+                    value: categorias,
+                    inline: false
+                }
+            )
+            .setFooter({
+                text: `Solicitado por ${message.author.tag}`
+            });
+
+        await message.reply({ embeds: [embed] })
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 20000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    if (!value) {
+        await message.reply(usage)
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    if (!/^\d+$/.test(value)) {
+        await message.reply('❌ O ID informado é inválido. Envie apenas números.')
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    if (action === 'addcanal') {
+        const channel = message.guild.channels.cache.get(value);
+
+        if (!channel) {
+            await message.reply('❌ Não encontrei um canal com esse ID neste servidor.')
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
+                .catch(() => {});
+            await message.delete().catch(() => {});
+            return true;
+        }
+
+        if (channel.type !== ChannelType.GuildVoice) {
+            await message.reply('❌ Esse ID não pertence a um canal de voz.')
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
+                .catch(() => {});
+            await message.delete().catch(() => {});
+            return true;
+        }
+
+        addAllowedChannel(message.guild.id, value);
+
+        await message.reply(`✅ Canal liberado para o bate-ponto: ${channel} (\`${channel.id}\`)`)
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    if (action === 'removecanal') {
+        removeAllowedChannel(message.guild.id, value);
+
+        await message.reply(`✅ Canal removido da lista do bate-ponto: \`${value}\``)
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    if (action === 'addcategoria') {
+        const channel = message.guild.channels.cache.get(value);
+
+        if (!channel) {
+            await message.reply('❌ Não encontrei uma categoria com esse ID neste servidor.')
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
+                .catch(() => {});
+            await message.delete().catch(() => {});
+            return true;
+        }
+
+        if (channel.type !== ChannelType.GuildCategory) {
+            await message.reply('❌ Esse ID não pertence a uma categoria.')
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
+                .catch(() => {});
+            await message.delete().catch(() => {});
+            return true;
+        }
+
+        addAllowedCategory(message.guild.id, value);
+
+        await message.reply(`✅ Categoria liberada para o bate-ponto: **${channel.name}** (\`${channel.id}\`)`)
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    if (action === 'removecategoria') {
+        removeAllowedCategory(message.guild.id, value);
+
+        await message.reply(`✅ Categoria removida da lista do bate-ponto: \`${value}\``)
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    await message.reply(usage)
+        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
+        .catch(() => {});
+    await message.delete().catch(() => {});
+    return true;
 }
 
 async function aplicarMudancaDeCargo(message, pendingRank) {
@@ -552,6 +737,11 @@ module.exports = {
         const commandName = args.shift()?.toLowerCase();
 
         if (!commandName) return;
+
+        if (commandName === 'bp') {
+            const handled = await handleBpCommand(message, ['bp', ...args]);
+            if (handled) return;
+        }
 
         const command = client.commands.get(commandName);
         if (!command) return;

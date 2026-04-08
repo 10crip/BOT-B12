@@ -1,12 +1,12 @@
 const { EmbedBuilder } = require('discord.js');
-const { getUserPoint, updateUserPoint, closeUserPoint } = require('../utils/batePonto');
+const {
+    getUserPoint,
+    updateUserPoint,
+    closeUserPoint,
+    isTrackedVoiceChannel
+} = require('../utils/batePonto');
 
 const LOG_CHANNEL_ID = '1479264100503523522';
-
-const ALLOWED_CATEGORY_IDS = [
-    '1474852514787758188',
-    '1478043522279145572'
-];
 
 const awayTimers = new Map();
 
@@ -17,12 +17,6 @@ function msToReadable(ms) {
     const segundos = totalSeconds % 60;
 
     return `${horas}h ${minutos}m ${segundos}s`;
-}
-
-function isTrackedChannel(channel) {
-    if (!channel) return false;
-    const parentId = channel.parentId || channel.parent?.id || null;
-    return ALLOWED_CATEGORY_IDS.includes(parentId);
 }
 
 function formatDateTime(date) {
@@ -51,8 +45,8 @@ module.exports = {
 
         if (!point.active) return;
 
-        const oldValid = isTrackedChannel(oldState.channel);
-        const newValid = isTrackedChannel(newState.channel);
+        const oldValid = isTrackedVoiceChannel(guild.id, oldState.channel);
+        const newValid = isTrackedVoiceChannel(guild.id, newState.channel);
 
         const timerKey = `${guild.id}:${userId}`;
 
@@ -111,7 +105,7 @@ module.exports = {
                         },
                         {
                             name: 'MOTIVO',
-                            value: 'Ficou 1 minuto e 30 segundos fora da call.',
+                            value: 'Ficou 1 minuto e 30 segundos fora de um canal permitido.',
                             inline: false
                         },
                         {
@@ -140,7 +134,7 @@ module.exports = {
 
                 await member.send(
                     `⏱️ Seu bate-ponto foi fechado automaticamente em **${guild.name}**.\n` +
-                    `Motivo: você ficou mais de 1 minuto e 30 segundos fora da call.\n` +
+                    `Motivo: você ficou mais de 1 minuto e 30 segundos fora de um canal permitido.\n` +
                     `Tempo registrado: **${msToReadable(sessionMs)}**`
                 ).catch(() => {});
             }, 90000);

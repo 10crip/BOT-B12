@@ -102,7 +102,7 @@ module.exports = {
                     }
                 }
 
-                const novoApelido = `B12 | ${nomeCity} #${idCity}`;
+                const novoApelido = `YKZ | ${nomeCity}#${idCity}`;
                 await membro.setNickname(novoApelido).catch(() => {});
 
                 return interaction.reply({

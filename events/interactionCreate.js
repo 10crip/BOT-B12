@@ -45,11 +45,7 @@ module.exports = {
         if (!interaction.guild) return;
 
         try {
-            // =========================
-            // BOTÕES
-            // =========================
             if (interaction.isButton()) {
-                // deixa o bate-ponto totalmente com o interactionCreatePonto.js
                 if (
                     interaction.customId === 'iniciar_ponto' ||
                     interaction.customId === 'fechar_ponto' ||
@@ -58,9 +54,6 @@ module.exports = {
                     return;
                 }
 
-                // =========================
-                // ABRIR TRANSFERÊNCIA
-                // =========================
                 if (interaction.customId === 'abrir_transferencia') {
                     const existingChannel = interaction.guild.channels.cache.find(
                         channel =>
@@ -117,9 +110,6 @@ module.exports = {
                     });
                 }
 
-                // =========================
-                // APROVAR TRANSFERÊNCIA
-                // =========================
                 if (interaction.customId === 'aprovar_transferencia') {
                     const transferChannelId = getTransferChannelIdFromEmbed(interaction);
 
@@ -159,9 +149,6 @@ module.exports = {
                     return;
                 }
 
-                // =========================
-                // RECUSAR TRANSFERÊNCIA
-                // =========================
                 if (interaction.customId === 'recusar_transferencia') {
                     const transferChannelId = getTransferChannelIdFromEmbed(interaction);
 
@@ -201,9 +188,6 @@ module.exports = {
                     return;
                 }
 
-                // =========================
-                // FECHAR TICKET
-                // =========================
                 if (interaction.customId === 'fechar_ticket') {
                     await interaction.reply({
                         content: '🗑️ Este ticket será apagado em 5 segundos.',
@@ -220,9 +204,6 @@ module.exports = {
                 return;
             }
 
-            // =========================
-            // SELECT MENU
-            // =========================
             if (interaction.isStringSelectMenu()) {
                 if (interaction.customId !== 'ticket_select') return;
 

@@ -3,32 +3,13 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    ChannelType
+    ChannelType,
+    PermissionFlagsBits
 } = require('discord.js');
 
-const PREFIX = process.env.PREFIX || '!';
-
-const { getSession, updateSession, deleteSession } = require('../utils/transferSessions');
-const { getPendingAdv, deletePendingAdv } = require('../utils/pendingAdv');
-const { getPendingRank, deletePendingRank } = require('../utils/pendingRank');
-const { getGuildConfig } = require('../guildConfig');
-const { addWarning } = require('../utils/advertencias');
-const {
-    addAllowedChannel,
-    removeAllowedChannel,
-    addAllowedCategory,
-    removeAllowedCategory,
-    getGuildPointConfig
-} = require('../utils/batePonto');
+const { updateSession, deleteSession } = require('../utils/transferSessions');
 
 const REVISAO_TRANSFERENCIA_CHANNEL_ID = '1491244658448273550';
-const ADV_LOG_CHANNEL_ID = '1474852514359803994';
-const PROMO_LOG_CHANNEL_ID = '1474852514581975245';
-const REBAIXA_LOG_CHANNEL_ID = '1474852514581975246';
-
-const ADV_ROLE_1 = '1474972984841339074';
-const ADV_ROLE_2 = '1474973087199006863';
-const ADV_ROLE_3 = '1474973148179992576';
 
 const QUESTIONS = [
     '1 - QUAL SEU NOME NA CIDADE?',
@@ -37,699 +18,254 @@ const QUESTIONS = [
     '4 - PROVAS: FOTO/PRINT'
 ];
 
-function formatDateTime(date) {
-    const data = date.toLocaleDateString('pt-BR');
-    const hora = date.toLocaleTimeString('pt-BR');
-    return { data, hora };
-}
-
-function isAdministrator(member) {
-    return member.permissions.has('Administrator');
-}
-
-function formatPointConfig(config) {
-    const channels = config.allowedChannelIds?.length
-        ? config.allowedChannelIds.map(id => `• <#${id}> (\`${id}\`)`).join('\n')
-        : '• No allowed channels';
-
-    const categories = config.allowedCategoryIds?.length
-        ? config.allowedCategoryIds.map(id => `• \`${id}\``).join('\n')
-        : '• No allowed categories';
-
-    return { channels, categories };
-}
-
-async function handleStandaloneBpCommands(message, commandName, args) {
-    const bpCommands = ['addcanal', 'removecanal', 'addcategoria', 'removecategoria', 'listabp'];
-
-    if (!bpCommands.includes(commandName)) return false;
-
-    if (!isAdministrator(message.member)) {
-        await message.reply('❌ You need administrator permission to use the time tracking commands.')
-            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
-            .catch(() => {});
-        await message.delete().catch(() => {});
-        return true;
-    }
-
-    if (commandName === 'listabp') {
-        const config = getGuildPointConfig(message.guild.id);
-        const { channels, categories } = formatPointConfig(config);
-
-        const embed = new EmbedBuilder()
-            .setColor('#2B2D31')
-            .setTitle('📋 TIME TRACKING CONFIGURATION')
-            .addFields(
-                {
-                    name: 'ALLOWED CHANNELS',
-                    value: channels,
-                    inline: false
-                },
-                {
-                    name: 'ALLOWED CATEGORIES',
-                    value: categories,
-                    inline: false
-                }
-            )
-            .setFooter({
-                text: `Requested by ${message.author.tag}`
-            });
-
-        await message.reply({ embeds: [embed] })
-            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 20000))
-            .catch(() => {});
-        await message.delete().catch(() => {});
-        return true;
-    }
-
-    const value = args[0];
-
-    if (!value) {
-        await message.reply(
-            `❌ Use like this:\n` +
-            `\`${PREFIX}addcanal <id>\`\n` +
-            `\`${PREFIX}removecanal <id>\`\n` +
-            `\`${PREFIX}addcategoria <id>\`\n` +
-            `\`${PREFIX}removecategoria <id>\`\n` +
-            `\`${PREFIX}listabp\``
-        ).then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000)).catch(() => {});
-        await message.delete().catch(() => {});
-        return true;
-    }
-
-    if (!/^\d+$/.test(value)) {
-        await message.reply('❌ Invalid ID. Send numbers only.')
-            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
-            .catch(() => {});
-        await message.delete().catch(() => {});
-        return true;
-    }
-
-    if (commandName === 'addcanal') {
-        const channel = message.guild.channels.cache.get(value);
-
-        if (!channel) {
-            await message.reply('❌ I could not find a channel with that ID in this server.')
-                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
-                .catch(() => {});
-            await message.delete().catch(() => {});
-            return true;
-        }
-
-        if (channel.type !== ChannelType.GuildVoice) {
-            await message.reply('❌ This ID does not belong to a voice channel.')
-                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
-                .catch(() => {});
-            await message.delete().catch(() => {});
-            return true;
-        }
-
-        addAllowedChannel(message.guild.id, value);
-
-        await message.reply(`✅ Allowed voice channel added for time tracking: ${channel} (\`${channel.id}\`)`)
-            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
-            .catch(() => {});
-        await message.delete().catch(() => {});
-        return true;
-    }
-
-    if (commandName === 'removecanal') {
-        removeAllowedChannel(message.guild.id, value);
-
-        await message.reply(`✅ Voice channel removed from time tracking list: \`${value}\``)
-            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
-            .catch(() => {});
-        await message.delete().catch(() => {});
-        return true;
-    }
-
-    if (commandName === 'addcategoria') {
-        const channel = message.guild.channels.cache.get(value);
-
-        if (!channel) {
-            await message.reply('❌ I could not find a category with that ID in this server.')
-                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
-                .catch(() => {});
-            await message.delete().catch(() => {});
-            return true;
-        }
-
-        if (channel.type !== ChannelType.GuildCategory) {
-            await message.reply('❌ This ID does not belong to a category.')
-                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
-                .catch(() => {});
-            await message.delete().catch(() => {});
-            return true;
-        }
-
-        addAllowedCategory(message.guild.id, value);
-
-        await message.reply(`✅ Allowed category added for time tracking: **${channel.name}** (\`${channel.id}\`)`)
-            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
-            .catch(() => {});
-        await message.delete().catch(() => {});
-        return true;
-    }
-
-    if (commandName === 'removecategoria') {
-        removeAllowedCategory(message.guild.id, value);
-
-        await message.reply(`✅ Category removed from time tracking list: \`${value}\``)
-            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
-            .catch(() => {});
-        await message.delete().catch(() => {});
-        return true;
-    }
-
-    return false;
-}
-
-async function aplicarMudancaDeCargo(message, pendingRank) {
-    const guild = message.guild;
-    const staffMember = await guild.members.fetch(pendingRank.staffId).catch(() => null);
-    const alvoMember = await guild.members.fetch(pendingRank.alvoId).catch(() => null);
-
-    if (!staffMember || !alvoMember) {
-        await message.reply('❌ Não foi possível concluir a operação.')
-            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
-            .catch(() => {});
-        return;
-    }
-
-    const cargos = [...message.mentions.roles.values()];
-
-    if (cargos.length < 2) {
-        await message.reply(
-            '❌ Você precisa mencionar **2 cargos**: primeiro o cargo novo e depois o cargo antigo.\n\nExemplo:\n@CargoNovo @CargoAntigo'
-        ).then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000)).catch(() => {});
-        return;
-    }
-
-    const cargoNovo = cargos[0];
-    const cargoAntigo = cargos[1];
-
-    await alvoMember.roles.add(cargoNovo).catch(() => {});
-    await alvoMember.roles.remove(cargoAntigo).catch(() => {});
-
-    const agora = new Date();
-    const { data, hora } = formatDateTime(agora);
-
-    const isPromocao = pendingRank.type === 'promocao';
-    const titulo = isPromocao ? '📈 REGISTRO DE PROMOÇÃO' : '📉 REGISTRO DE REBAIXAMENTO';
-    const acaoTexto = isPromocao ? 'PROMOÇÃO' : 'REBAIXAMENTO';
-    const canalLogId = isPromocao ? PROMO_LOG_CHANNEL_ID : REBAIXA_LOG_CHANNEL_ID;
-
-    const embedLog = new EmbedBuilder()
-        .setColor('#2B2D31')
-        .setTitle(titulo)
-        .addFields(
-            {
-                name: 'MEMBRO',
-                value: `${alvoMember}\n\`${alvoMember.user.tag}\``,
-                inline: false
-            },
-            {
-                name: 'STAFF RESPONSÁVEL',
-                value: `${staffMember}\n\`${staffMember.user.tag}\``,
-                inline: false
-            },
-            {
-                name: 'CARGO NOVO',
-                value: `${cargoNovo}`,
-                inline: true
-            },
-            {
-                name: 'CARGO REMOVIDO',
-                value: `${cargoAntigo}`,
-                inline: true
-            },
-            {
-                name: 'AÇÃO',
-                value: acaoTexto,
-                inline: true
-            },
-            {
-                name: 'DATA',
-                value: data,
-                inline: true
-            },
-            {
-                name: 'HORA',
-                value: hora,
-                inline: true
-            }
-        )
-        .setFooter({
-            text: 'Sistema profissional de promoções e rebaixamentos B12'
-        });
-
-    const canalLog = guild.channels.cache.get(canalLogId);
-    if (canalLog) {
-        await canalLog.send({
-            embeds: [embedLog]
-        }).catch(() => {});
-    }
-
-    await alvoMember.send({
-        embeds: [
-            new EmbedBuilder()
-                .setColor('#2B2D31')
-                .setTitle(isPromocao ? '📈 VOCÊ FOI PROMOVIDO' : '📉 VOCÊ FOI REBAIXADO')
-                .addFields(
-                    {
-                        name: 'SERVIDOR',
-                        value: guild.name,
-                        inline: false
-                    },
-                    {
-                        name: 'STAFF RESPONSÁVEL',
-                        value: staffMember.user.tag,
-                        inline: false
-                    },
-                    {
-                        name: 'CARGO NOVO',
-                        value: `${cargoNovo}`,
-                        inline: true
-                    },
-                    {
-                        name: 'CARGO REMOVIDO',
-                        value: `${cargoAntigo}`,
-                        inline: true
-                    },
-                    {
-                        name: 'DATA',
-                        value: data,
-                        inline: true
-                    },
-                    {
-                        name: 'HORA',
-                        value: hora,
-                        inline: true
-                    }
-                )
-                .setFooter({
-                    text: 'Em caso de dúvidas, procure a administração.'
-                })
-        ]
-    }).catch(() => {});
-
-    await message.reply(
-        `✅ ${isPromocao ? 'Promoção' : 'Rebaixamento'} aplicada com sucesso em ${alvoMember}.\n` +
-        `➕ Cargo novo: ${cargoNovo}\n` +
-        `➖ Cargo removido: ${cargoAntigo}`
-    ).then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000)).catch(() => {});
-}
-
-async function aplicarAdvertencia(message, pendingData) {
-    const guild = message.guild;
-    const staffMember = await guild.members.fetch(pendingData.staffId).catch(() => null);
-    const alvoMember = await guild.members.fetch(pendingData.alvoId).catch(() => null);
-
-    if (!staffMember || !alvoMember) {
-        await message.reply('❌ Não foi possível concluir a advertência.')
-            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
-            .catch(() => {});
-        return;
-    }
-
-    const agora = new Date();
-    const { data, hora } = formatDateTime(agora);
-
-    const warningData = {
-        motivo: pendingData.motivo,
-        staffId: staffMember.id,
-        staffTag: staffMember.user.tag,
-        data,
-        hora,
-        timestamp: agora.getTime()
-    };
-
-    const warningState = addWarning(guild.id, alvoMember.id, warningData);
-    const totalWarnings = warningState.total;
-
-    const rolesToClear = [ADV_ROLE_1, ADV_ROLE_2, ADV_ROLE_3];
-
-    for (const roleId of rolesToClear) {
-        if (alvoMember.roles.cache.has(roleId)) {
-            await alvoMember.roles.remove(roleId).catch(() => {});
-        }
-    }
-
-    let actionText = 'Advertência aplicada';
-    let appliedRole = null;
-    let banido = false;
-
-    if (totalWarnings === 1) {
-        appliedRole = ADV_ROLE_1;
-    } else if (totalWarnings === 2) {
-        appliedRole = ADV_ROLE_2;
-    } else if (totalWarnings === 3) {
-        appliedRole = ADV_ROLE_3;
-    } else if (totalWarnings >= 4) {
-        banido = true;
-        actionText = 'Banimento automático por exceder o limite de advertências';
-    }
-
-    if (appliedRole) {
-        await alvoMember.roles.add(appliedRole).catch(() => {});
-    }
-
-    const historicoTexto = warningState.historico
-        .map((item, index) => {
-            return `**${index + 1}ª advertência**\nMotivo: ${item.motivo}\nStaff: ${item.staffTag}\nData: ${item.data} às ${item.hora}`;
-        })
-        .join('\n\n')
-        .slice(0, 3900) || 'Nenhum histórico disponível.';
-
-    const logChannel = guild.channels.cache.get(ADV_LOG_CHANNEL_ID);
-
-    const embedLog = new EmbedBuilder()
-        .setColor('#ff0000')
-        .setTitle('🚨 REGISTRO DE ADVERTÊNCIA')
-        .addFields(
-            {
-                name: 'MEMBRO',
-                value: `${alvoMember} \n\`${alvoMember.user.tag}\``,
-                inline: false
-            },
-            {
-                name: 'STAFF RESPONSÁVEL',
-                value: `${staffMember} \n\`${staffMember.user.tag}\``,
-                inline: false
-            },
-            {
-                name: 'MOTIVO',
-                value: pendingData.motivo,
-                inline: false
-            },
-            {
-                name: 'DATA',
-                value: data,
-                inline: true
-            },
-            {
-                name: 'HORA',
-                value: hora,
-                inline: true
-            },
-            {
-                name: 'TOTAL DE ADVERTÊNCIAS',
-                value: `${totalWarnings}`,
-                inline: true
-            },
-            {
-                name: 'AÇÃO',
-                value: actionText,
-                inline: false
-            },
-            {
-                name: 'HISTÓRICO COMPLETO',
-                value: historicoTexto,
-                inline: false
-            }
-        )
-        .setFooter({
-            text: 'Sistema profissional de advertências B12'
-        });
-
-    if (logChannel) {
-        await logChannel.send({
-            embeds: [embedLog]
-        }).catch(() => {});
-    }
-
-    const embedDM = new EmbedBuilder()
-        .setColor('#ff0000')
-        .setTitle('🚨 VOCÊ RECEBEU UMA ADVERTÊNCIA')
-        .addFields(
-            {
-                name: 'SERVIDOR',
-                value: guild.name,
-                inline: false
-            },
-            {
-                name: 'MOTIVO',
-                value: pendingData.motivo,
-                inline: false
-            },
-            {
-                name: 'STAFF RESPONSÁVEL',
-                value: staffMember.user.tag,
-                inline: false
-            },
-            {
-                name: 'DATA',
-                value: data,
-                inline: true
-            },
-            {
-                name: 'HORA',
-                value: hora,
-                inline: true
-            },
-            {
-                name: 'TOTAL DE ADVERTÊNCIAS',
-                value: `${totalWarnings}`,
-                inline: true
-            },
-            {
-                name: 'AÇÃO APLICADA',
-                value: actionText,
-                inline: false
-            }
-        )
-        .setFooter({
-            text: 'Caso tenha dúvidas, contate a administração.'
-        });
-
-    await alvoMember.send({
-        embeds: [embedDM]
-    }).catch(() => {});
-
-    if (banido) {
-        await alvoMember.ban({
-            reason: `4ª advertência recebida. Motivo atual: ${pendingData.motivo}`
-        }).catch(() => {});
-    }
-
-    await message.reply(
-        `✅ Advertência aplicada com sucesso em ${alvoMember}.\n` +
-        `📌 Total atual: **${totalWarnings}**`
-    ).then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000)).catch(() => {});
+function buildCloseRow() {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('fechar_ticket')
+            .setLabel('FECHAR TICKET')
+            .setStyle(ButtonStyle.Danger)
+    );
 }
 
 module.exports = {
-    name: 'messageCreate',
+    name: 'interactionCreate',
 
-    async execute(message, client) {
-        if (!message.guild) return;
-        if (message.author.bot) return;
-
-        const avisoCommand = client.commands.get('aviso');
-        if (avisoCommand && typeof avisoCommand.handlePendingAvisoConfirmation === 'function') {
-            const handledAviso = await avisoCommand.handlePendingAvisoConfirmation(message);
-            if (handledAviso) return;
-        }
-
-        {
-            const pendingKey = `${message.guild.id}:${message.channel.id}:${message.author.id}`;
-            const pendingRank = getPendingRank(pendingKey);
-
-            if (pendingRank) {
-                if (Date.now() > pendingRank.expiresAt) {
-                    deletePendingRank(pendingKey);
-
-                    await message.reply('❌ O tempo para informar os cargos expirou.')
-                        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
-                        .catch(() => {});
-                    return;
-                }
-
-                const guildConfig = getGuildConfig(message.guild.id);
-                const admUpRoleIds = guildConfig.admUpRoleIds || [];
-                const podeUsar = admUpRoleIds.some(roleId => message.member.roles.cache.has(roleId));
-
-                if (!podeUsar) {
-                    deletePendingRank(pendingKey);
-
-                    await message.reply('❌ Você não tem mais permissão para concluir essa ação.')
-                        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
-                        .catch(() => {});
-                    return;
-                }
-
-                deletePendingRank(pendingKey);
-                await aplicarMudancaDeCargo(message, pendingRank);
-                await message.delete().catch(() => {});
-                return;
-            }
-        }
-
-        if (message.content.toLowerCase().trim() === 'confirmar') {
-            const pendingKey = `${message.guild.id}:${message.channel.id}:${message.author.id}`;
-            const pendingAdv = getPendingAdv(pendingKey);
-
-            if (pendingAdv) {
-                if (Date.now() > pendingAdv.expiresAt) {
-                    deletePendingAdv(pendingKey);
-
-                    await message.reply('❌ O tempo para confirmar a advertência expirou.')
-                        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
-                        .catch(() => {});
-                    return;
-                }
-
-                const guildConfig = getGuildConfig(message.guild.id);
-                const admAdvRoleIds = guildConfig.admAdvRoleIds || [];
-                const podeAdvertir = admAdvRoleIds.some(roleId => message.member.roles.cache.has(roleId));
-
-                if (!podeAdvertir) {
-                    await message.reply('❌ Você não tem mais permissão para confirmar advertências.')
-                        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
-                        .catch(() => {});
-                    deletePendingAdv(pendingKey);
-                    return;
-                }
-
-                deletePendingAdv(pendingKey);
-                await aplicarAdvertencia(message, pendingAdv);
-                await message.delete().catch(() => {});
-                return;
-            }
-        }
-
-        const session = getSession(message.channel.id);
-
-        if (session && session.type === 'transferencia' && session.status === 'collecting') {
-            if (message.author.id !== session.userId) return;
-
-            const currentIndex = session.currentQuestionIndex || 0;
-            const answers = session.answers || {};
-
-            const answerValue =
-                message.attachments.size > 0
-                    ? message.attachments.map(att => att.url).join('\n')
-                    : message.content.trim();
-
-            if (!answerValue) {
-                await message.reply('❌ Responda a pergunta para continuar.')
-                    .then(msg => setTimeout(() => msg.delete().catch(() => {}), 6000))
-                    .catch(() => {});
-                return;
-            }
-
-            answers[`q${currentIndex + 1}`] = answerValue;
-
-            const nextIndex = currentIndex + 1;
-
-            if (nextIndex < QUESTIONS.length) {
-                updateSession(message.channel.id, {
-                    answers,
-                    currentQuestionIndex: nextIndex
-                });
-
-                await message.channel.send(`**${QUESTIONS[nextIndex]}**`);
-                return;
-            }
-
-            updateSession(message.channel.id, {
-                answers,
-                currentQuestionIndex: nextIndex,
-                status: 'completed'
-            });
-
-            const canalRevisao = message.guild.channels.cache.get(REVISAO_TRANSFERENCIA_CHANNEL_ID);
-
-            if (!canalRevisao) {
-                await message.channel.send('❌ Não encontrei o canal de revisão da transferência.');
-                return;
-            }
-
-            const embed = new EmbedBuilder()
-                .setColor('#2B2D31')
-                .setTitle('PAINEL DE TRANSFERENCIA')
-                .addFields(
-                    {
-                        name: 'USUÁRIO',
-                        value: `<@${session.userId}>`,
-                        inline: false
-                    },
-                    {
-                        name: '1 - QUAL SEU NOME NA CIDADE?',
-                        value: answers.q1 || 'Não informado',
-                        inline: false
-                    },
-                    {
-                        name: '2 - QUAL SEU ID NA CIDADE?',
-                        value: answers.q2 || 'Não informado',
-                        inline: false
-                    },
-                    {
-                        name: '3 - QUAL CORP/FAC VOCE FAZIA PARTE?',
-                        value: answers.q3 || 'Não informado',
-                        inline: false
-                    },
-                    {
-                        name: '4 - PROVAS: FOTO/PRINT',
-                        value: answers.q4 || 'Não informado',
-                        inline: false
-                    }
-                )
-                .setFooter({
-                    text: `Canal: ${message.channel.id}`
-                });
-
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId('aprovar_transferencia')
-                    .setLabel('APROVAR')
-                    .setStyle(ButtonStyle.Success),
-
-                new ButtonBuilder()
-                    .setCustomId('recusar_transferencia')
-                    .setLabel('RECUSAR')
-                    .setStyle(ButtonStyle.Danger)
-            );
-
-            await canalRevisao.send({
-                embeds: [embed],
-                components: [row]
-            });
-
-            await message.channel.send(
-                '✅ Suas respostas foram enviadas para análise. Agora é só aguardar um recrutador aceitar sua transferência.\n\n' +
-                '🗑️ Este canal será apagado em 10 segundos.'
-            );
-
-            setTimeout(async () => {
-                deleteSession(message.channel.id);
-                await message.channel.delete().catch(() => {});
-            }, 10000);
-
-            return;
-        }
-
-        if (!message.content.startsWith(PREFIX)) return;
-
-        const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
-        const commandName = args.shift()?.toLowerCase();
-
-        if (!commandName) return;
-
-        const handledBp = await handleStandaloneBpCommands(message, commandName, args);
-        if (handledBp) return;
-
-        const command = client.commands.get(commandName);
-        if (!command) return;
+    async execute(interaction) {
+        if (!interaction.guild) return;
 
         try {
-            await command.execute(message, args, client);
-        } catch (error) {
-            console.error(`❌ Erro ao executar o comando ${commandName}:`, error);
+            // =========================
+            // BOTÕES
+            // =========================
+            if (interaction.isButton()) {
+                // -------- ABRIR TRANSFERÊNCIA --------
+                if (interaction.customId === 'abrir_transferencia') {
+                    const existingChannel = interaction.guild.channels.cache.find(
+                        channel =>
+                            channel.type === ChannelType.GuildText &&
+                            channel.name === `transferencia-${interaction.user.id}`
+                    );
 
-            await message.reply({
-                content: '❌ Ocorreu um erro ao executar esse comando.'
-            }).catch(() => {});
+                    if (existingChannel) {
+                        return interaction.reply({
+                            content: `❌ Você já possui uma transferência aberta em ${existingChannel}.`,
+                            ephemeral: true
+                        });
+                    }
+
+                    const channel = await interaction.guild.channels.create({
+                        name: `transferencia-${interaction.user.id}`,
+                        type: ChannelType.GuildText,
+                        permissionOverwrites: [
+                            {
+                                id: interaction.guild.id,
+                                deny: [PermissionFlagsBits.ViewChannel]
+                            },
+                            {
+                                id: interaction.user.id,
+                                allow: [
+                                    PermissionFlagsBits.ViewChannel,
+                                    PermissionFlagsBits.SendMessages,
+                                    PermissionFlagsBits.ReadMessageHistory,
+                                    PermissionFlagsBits.AttachFiles
+                                ]
+                            }
+                        ]
+                    });
+
+                    // Inicializa a sessão para o messageCreate continuar o fluxo
+                    updateSession(channel.id, {
+                        type: 'transferencia',
+                        userId: interaction.user.id,
+                        answers: {},
+                        currentQuestionIndex: 0,
+                        status: 'collecting',
+                        createdAt: Date.now()
+                    });
+
+                    await channel.send(
+                        `Olá ${interaction.user}, responda às perguntas abaixo.\n\n**${QUESTIONS[0]}**`
+                    );
+
+                    return interaction.reply({
+                        content: `✅ Sua transferência foi aberta em ${channel}.`,
+                        ephemeral: true
+                    });
+                }
+
+                // -------- APROVAR TRANSFERÊNCIA --------
+                if (interaction.customId === 'aprovar_transferencia') {
+                    const embed = interaction.message.embeds?.[0];
+                    const footerText = embed?.footer?.text || '';
+                    const match = footerText.match(/Canal:\s*(\d+)/i);
+                    const channelId = match?.[1];
+
+                    const disabledRow = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId('aprovar_transferencia_done')
+                            .setLabel('APROVADA')
+                            .setStyle(ButtonStyle.Success)
+                            .setDisabled(true),
+                        new ButtonBuilder()
+                            .setCustomId('recusar_transferencia_done')
+                            .setLabel('RECUSAR')
+                            .setStyle(ButtonStyle.Danger)
+                            .setDisabled(true)
+                    );
+
+                    await interaction.update({
+                        components: [disabledRow]
+                    });
+
+                    if (channelId) {
+                        const transferChannel = interaction.guild.channels.cache.get(channelId);
+
+                        if (transferChannel) {
+                            await transferChannel.send(
+                                `✅ ${interaction.user} aprovou sua transferência.\n\n🗑️ Este canal será apagado em 10 segundos.`
+                            ).catch(() => {});
+
+                            setTimeout(async () => {
+                                deleteSession(channelId);
+                                await transferChannel.delete().catch(() => {});
+                            }, 10000);
+                        }
+                    }
+
+                    return;
+                }
+
+                // -------- RECUSAR TRANSFERÊNCIA --------
+                if (interaction.customId === 'recusar_transferencia') {
+                    const embed = interaction.message.embeds?.[0];
+                    const footerText = embed?.footer?.text || '';
+                    const match = footerText.match(/Canal:\s*(\d+)/i);
+                    const channelId = match?.[1];
+
+                    const disabledRow = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId('aprovar_transferencia_done')
+                            .setLabel('APROVAR')
+                            .setStyle(ButtonStyle.Success)
+                            .setDisabled(true),
+                        new ButtonBuilder()
+                            .setCustomId('recusar_transferencia_done')
+                            .setLabel('RECUSADA')
+                            .setStyle(ButtonStyle.Danger)
+                            .setDisabled(true)
+                    );
+
+                    await interaction.update({
+                        components: [disabledRow]
+                    });
+
+                    if (channelId) {
+                        const transferChannel = interaction.guild.channels.cache.get(channelId);
+
+                        if (transferChannel) {
+                            await transferChannel.send(
+                                `❌ ${interaction.user} recusou sua transferência.\n\n🗑️ Este canal será apagado em 10 segundos.`
+                            ).catch(() => {});
+
+                            setTimeout(async () => {
+                                deleteSession(channelId);
+                                await transferChannel.delete().catch(() => {});
+                            }, 10000);
+                        }
+                    }
+
+                    return;
+                }
+
+                // -------- FECHAR TICKET --------
+                if (interaction.customId === 'fechar_ticket') {
+                    await interaction.reply({
+                        content: '🗑️ Este ticket será apagado em 5 segundos.',
+                        ephemeral: true
+                    }).catch(() => {});
+
+                    setTimeout(async () => {
+                        await interaction.channel.delete().catch(() => {});
+                    }, 5000);
+
+                    return;
+                }
+            }
+
+            // =========================
+            // SELECT MENU
+            // =========================
+            if (interaction.isStringSelectMenu()) {
+                if (interaction.customId === 'ticket_select') {
+                    const tipo = interaction.values[0];
+
+                    const existingChannel = interaction.guild.channels.cache.find(
+                        channel =>
+                            channel.type === ChannelType.GuildText &&
+                            channel.name === `ticket-${tipo}-${interaction.user.id}`
+                    );
+
+                    if (existingChannel) {
+                        return interaction.reply({
+                            content: `❌ Você já possui um ticket desse tipo aberto em ${existingChannel}.`,
+                            ephemeral: true
+                        });
+                    }
+
+                    const channel = await interaction.guild.channels.create({
+                        name: `ticket-${tipo}-${interaction.user.id}`,
+                        type: ChannelType.GuildText,
+                        permissionOverwrites: [
+                            {
+                                id: interaction.guild.id,
+                                deny: [PermissionFlagsBits.ViewChannel]
+                            },
+                            {
+                                id: interaction.user.id,
+                                allow: [
+                                    PermissionFlagsBits.ViewChannel,
+                                    PermissionFlagsBits.SendMessages,
+                                    PermissionFlagsBits.ReadMessageHistory,
+                                    PermissionFlagsBits.AttachFiles
+                                ]
+                            }
+                        ]
+                    });
+
+                    const embed = new EmbedBuilder()
+                        .setColor('#2B2D31')
+                        .setTitle('🎟️ TICKET ABERTO')
+                        .setDescription(
+                            `Olá ${interaction.user}, seu ticket foi aberto com sucesso.\n\n` +
+                            `**Categoria:** ${tipo}\n\n` +
+                            `Descreva seu problema e aguarde o atendimento da equipe.`
+                        );
+
+                    await channel.send({
+                        embeds: [embed],
+                        components: [buildCloseRow()]
+                    });
+
+                    return interaction.reply({
+                        content: `✅ Seu ticket foi criado em ${channel}.`,
+                        ephemeral: true
+                    });
+                }
+            }
+        } catch (error) {
+            console.error('❌ Erro no interactionCreate:', error);
+
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp({
+                    content: '❌ Ocorreu um erro ao processar esta interação.',
+                    ephemeral: true
+                }).catch(() => {});
+            } else {
+                await interaction.reply({
+                    content: '❌ Ocorreu um erro ao processar esta interação.',
+                    ephemeral: true
+                }).catch(() => {});
+            }
         }
     }
 };

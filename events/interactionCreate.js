@@ -1,31 +1,34 @@
 const {
-    ChannelType,
-    PermissionsBitField,
     EmbedBuilder,
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    ModalBuilder,
-    TextInputBuilder,
-    TextInputStyle
+    ChannelType
 } = require('discord.js');
 
+const PREFIX = process.env.PREFIX || '!';
+
+const { getSession, updateSession, deleteSession } = require('../utils/transferSessions');
+const { getPendingAdv, deletePendingAdv } = require('../utils/pendingAdv');
+const { getPendingRank, deletePendingRank } = require('../utils/pendingRank');
 const { getGuildConfig } = require('../guildConfig');
-const { setSession, getSession, updateSession } = require('../utils/transferSessions');
+const { addWarning } = require('../utils/advertencias');
+const {
+    addAllowedChannel,
+    removeAllowedChannel,
+    addAllowedCategory,
+    removeAllowedCategory,
+    getGuildPointConfig
+} = require('../utils/batePonto');
 
-const PAINEL_TRANSFERENCIA_CHANNEL_ID = '1491220519494619227';
-const CARGO_APROVADO_TRANSFERENCIA_ID = '1491257490594332712';
-const REGISTRO_PANEL_CHANNEL_ID = '1491264478224973865';
+const REVISAO_TRANSFERENCIA_CHANNEL_ID = '1491244658448273550';
+const ADV_LOG_CHANNEL_ID = '1474852514359803994';
+const PROMO_LOG_CHANNEL_ID = '1474852514581975245';
+const REBAIXA_LOG_CHANNEL_ID = '1474852514581975246';
 
-const REGISTRO_REMOVE_ROLE_IDS = [
-    '1491257490594332712',
-    '1474852513466421504'
-];
-
-const REGISTRO_ADD_ROLE_IDS = [
-    '1474852513436930182',
-    '1474852513466421510'
-];
+const ADV_ROLE_1 = '1474972984841339074';
+const ADV_ROLE_2 = '1474973087199006863';
+const ADV_ROLE_3 = '1474973148179992576';
 
 const QUESTIONS = [
     '1 - QUAL SEU NOME NA CIDADE?',
@@ -34,415 +37,699 @@ const QUESTIONS = [
     '4 - PROVAS: FOTO/PRINT'
 ];
 
-function hasAnyConfiguredRole(member, roleIds) {
-    if (!Array.isArray(roleIds) || !roleIds.length) return false;
-    return roleIds.some(roleId => member.roles.cache.has(roleId));
+function formatDateTime(date) {
+    const data = date.toLocaleDateString('pt-BR');
+    const hora = date.toLocaleTimeString('pt-BR');
+    return { data, hora };
+}
+
+function isAdministrator(member) {
+    return member.permissions.has('Administrator');
+}
+
+function formatPointConfig(config) {
+    const channels = config.allowedChannelIds?.length
+        ? config.allowedChannelIds.map(id => `• <#${id}> (\`${id}\`)`).join('\n')
+        : '• No allowed channels';
+
+    const categories = config.allowedCategoryIds?.length
+        ? config.allowedCategoryIds.map(id => `• \`${id}\``).join('\n')
+        : '• No allowed categories';
+
+    return { channels, categories };
+}
+
+async function handleStandaloneBpCommands(message, commandName, args) {
+    const bpCommands = ['addcanal', 'removecanal', 'addcategoria', 'removecategoria', 'listabp'];
+
+    if (!bpCommands.includes(commandName)) return false;
+
+    if (!isAdministrator(message.member)) {
+        await message.reply('❌ You need administrator permission to use the time tracking commands.')
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    if (commandName === 'listabp') {
+        const config = getGuildPointConfig(message.guild.id);
+        const { channels, categories } = formatPointConfig(config);
+
+        const embed = new EmbedBuilder()
+            .setColor('#2B2D31')
+            .setTitle('📋 TIME TRACKING CONFIGURATION')
+            .addFields(
+                {
+                    name: 'ALLOWED CHANNELS',
+                    value: channels,
+                    inline: false
+                },
+                {
+                    name: 'ALLOWED CATEGORIES',
+                    value: categories,
+                    inline: false
+                }
+            )
+            .setFooter({
+                text: `Requested by ${message.author.tag}`
+            });
+
+        await message.reply({ embeds: [embed] })
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 20000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    const value = args[0];
+
+    if (!value) {
+        await message.reply(
+            `❌ Use like this:\n` +
+            `\`${PREFIX}addcanal <id>\`\n` +
+            `\`${PREFIX}removecanal <id>\`\n` +
+            `\`${PREFIX}addcategoria <id>\`\n` +
+            `\`${PREFIX}removecategoria <id>\`\n` +
+            `\`${PREFIX}listabp\``
+        ).then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000)).catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    if (!/^\d+$/.test(value)) {
+        await message.reply('❌ Invalid ID. Send numbers only.')
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    if (commandName === 'addcanal') {
+        const channel = message.guild.channels.cache.get(value);
+
+        if (!channel) {
+            await message.reply('❌ I could not find a channel with that ID in this server.')
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
+                .catch(() => {});
+            await message.delete().catch(() => {});
+            return true;
+        }
+
+        if (channel.type !== ChannelType.GuildVoice) {
+            await message.reply('❌ This ID does not belong to a voice channel.')
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
+                .catch(() => {});
+            await message.delete().catch(() => {});
+            return true;
+        }
+
+        addAllowedChannel(message.guild.id, value);
+
+        await message.reply(`✅ Allowed voice channel added for time tracking: ${channel} (\`${channel.id}\`)`)
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    if (commandName === 'removecanal') {
+        removeAllowedChannel(message.guild.id, value);
+
+        await message.reply(`✅ Voice channel removed from time tracking list: \`${value}\``)
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    if (commandName === 'addcategoria') {
+        const channel = message.guild.channels.cache.get(value);
+
+        if (!channel) {
+            await message.reply('❌ I could not find a category with that ID in this server.')
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
+                .catch(() => {});
+            await message.delete().catch(() => {});
+            return true;
+        }
+
+        if (channel.type !== ChannelType.GuildCategory) {
+            await message.reply('❌ This ID does not belong to a category.')
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000))
+                .catch(() => {});
+            await message.delete().catch(() => {});
+            return true;
+        }
+
+        addAllowedCategory(message.guild.id, value);
+
+        await message.reply(`✅ Allowed category added for time tracking: **${channel.name}** (\`${channel.id}\`)`)
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    if (commandName === 'removecategoria') {
+        removeAllowedCategory(message.guild.id, value);
+
+        await message.reply(`✅ Category removed from time tracking list: \`${value}\``)
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000))
+            .catch(() => {});
+        await message.delete().catch(() => {});
+        return true;
+    }
+
+    return false;
+}
+
+async function aplicarMudancaDeCargo(message, pendingRank) {
+    const guild = message.guild;
+    const staffMember = await guild.members.fetch(pendingRank.staffId).catch(() => null);
+    const alvoMember = await guild.members.fetch(pendingRank.alvoId).catch(() => null);
+
+    if (!staffMember || !alvoMember) {
+        await message.reply('❌ Não foi possível concluir a operação.')
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+            .catch(() => {});
+        return;
+    }
+
+    const cargos = [...message.mentions.roles.values()];
+
+    if (cargos.length < 2) {
+        await message.reply(
+            '❌ Você precisa mencionar **2 cargos**: primeiro o cargo novo e depois o cargo antigo.\n\nExemplo:\n@CargoNovo @CargoAntigo'
+        ).then(msg => setTimeout(() => msg.delete().catch(() => {}), 12000)).catch(() => {});
+        return;
+    }
+
+    const cargoNovo = cargos[0];
+    const cargoAntigo = cargos[1];
+
+    await alvoMember.roles.add(cargoNovo).catch(() => {});
+    await alvoMember.roles.remove(cargoAntigo).catch(() => {});
+
+    const agora = new Date();
+    const { data, hora } = formatDateTime(agora);
+
+    const isPromocao = pendingRank.type === 'promocao';
+    const titulo = isPromocao ? '📈 REGISTRO DE PROMOÇÃO' : '📉 REGISTRO DE REBAIXAMENTO';
+    const acaoTexto = isPromocao ? 'PROMOÇÃO' : 'REBAIXAMENTO';
+    const canalLogId = isPromocao ? PROMO_LOG_CHANNEL_ID : REBAIXA_LOG_CHANNEL_ID;
+
+    const embedLog = new EmbedBuilder()
+        .setColor('#2B2D31')
+        .setTitle(titulo)
+        .addFields(
+            {
+                name: 'MEMBRO',
+                value: `${alvoMember}\n\`${alvoMember.user.tag}\``,
+                inline: false
+            },
+            {
+                name: 'STAFF RESPONSÁVEL',
+                value: `${staffMember}\n\`${staffMember.user.tag}\``,
+                inline: false
+            },
+            {
+                name: 'CARGO NOVO',
+                value: `${cargoNovo}`,
+                inline: true
+            },
+            {
+                name: 'CARGO REMOVIDO',
+                value: `${cargoAntigo}`,
+                inline: true
+            },
+            {
+                name: 'AÇÃO',
+                value: acaoTexto,
+                inline: true
+            },
+            {
+                name: 'DATA',
+                value: data,
+                inline: true
+            },
+            {
+                name: 'HORA',
+                value: hora,
+                inline: true
+            }
+        )
+        .setFooter({
+            text: 'Sistema profissional de promoções e rebaixamentos B12'
+        });
+
+    const canalLog = guild.channels.cache.get(canalLogId);
+    if (canalLog) {
+        await canalLog.send({
+            embeds: [embedLog]
+        }).catch(() => {});
+    }
+
+    await alvoMember.send({
+        embeds: [
+            new EmbedBuilder()
+                .setColor('#2B2D31')
+                .setTitle(isPromocao ? '📈 VOCÊ FOI PROMOVIDO' : '📉 VOCÊ FOI REBAIXADO')
+                .addFields(
+                    {
+                        name: 'SERVIDOR',
+                        value: guild.name,
+                        inline: false
+                    },
+                    {
+                        name: 'STAFF RESPONSÁVEL',
+                        value: staffMember.user.tag,
+                        inline: false
+                    },
+                    {
+                        name: 'CARGO NOVO',
+                        value: `${cargoNovo}`,
+                        inline: true
+                    },
+                    {
+                        name: 'CARGO REMOVIDO',
+                        value: `${cargoAntigo}`,
+                        inline: true
+                    },
+                    {
+                        name: 'DATA',
+                        value: data,
+                        inline: true
+                    },
+                    {
+                        name: 'HORA',
+                        value: hora,
+                        inline: true
+                    }
+                )
+                .setFooter({
+                    text: 'Em caso de dúvidas, procure a administração.'
+                })
+        ]
+    }).catch(() => {});
+
+    await message.reply(
+        `✅ ${isPromocao ? 'Promoção' : 'Rebaixamento'} aplicada com sucesso em ${alvoMember}.\n` +
+        `➕ Cargo novo: ${cargoNovo}\n` +
+        `➖ Cargo removido: ${cargoAntigo}`
+    ).then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000)).catch(() => {});
+}
+
+async function aplicarAdvertencia(message, pendingData) {
+    const guild = message.guild;
+    const staffMember = await guild.members.fetch(pendingData.staffId).catch(() => null);
+    const alvoMember = await guild.members.fetch(pendingData.alvoId).catch(() => null);
+
+    if (!staffMember || !alvoMember) {
+        await message.reply('❌ Não foi possível concluir a advertência.')
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+            .catch(() => {});
+        return;
+    }
+
+    const agora = new Date();
+    const { data, hora } = formatDateTime(agora);
+
+    const warningData = {
+        motivo: pendingData.motivo,
+        staffId: staffMember.id,
+        staffTag: staffMember.user.tag,
+        data,
+        hora,
+        timestamp: agora.getTime()
+    };
+
+    const warningState = addWarning(guild.id, alvoMember.id, warningData);
+    const totalWarnings = warningState.total;
+
+    const rolesToClear = [ADV_ROLE_1, ADV_ROLE_2, ADV_ROLE_3];
+
+    for (const roleId of rolesToClear) {
+        if (alvoMember.roles.cache.has(roleId)) {
+            await alvoMember.roles.remove(roleId).catch(() => {});
+        }
+    }
+
+    let actionText = 'Advertência aplicada';
+    let appliedRole = null;
+    let banido = false;
+
+    if (totalWarnings === 1) {
+        appliedRole = ADV_ROLE_1;
+    } else if (totalWarnings === 2) {
+        appliedRole = ADV_ROLE_2;
+    } else if (totalWarnings === 3) {
+        appliedRole = ADV_ROLE_3;
+    } else if (totalWarnings >= 4) {
+        banido = true;
+        actionText = 'Banimento automático por exceder o limite de advertências';
+    }
+
+    if (appliedRole) {
+        await alvoMember.roles.add(appliedRole).catch(() => {});
+    }
+
+    const historicoTexto = warningState.historico
+        .map((item, index) => {
+            return `**${index + 1}ª advertência**\nMotivo: ${item.motivo}\nStaff: ${item.staffTag}\nData: ${item.data} às ${item.hora}`;
+        })
+        .join('\n\n')
+        .slice(0, 3900) || 'Nenhum histórico disponível.';
+
+    const logChannel = guild.channels.cache.get(ADV_LOG_CHANNEL_ID);
+
+    const embedLog = new EmbedBuilder()
+        .setColor('#ff0000')
+        .setTitle('🚨 REGISTRO DE ADVERTÊNCIA')
+        .addFields(
+            {
+                name: 'MEMBRO',
+                value: `${alvoMember} \n\`${alvoMember.user.tag}\``,
+                inline: false
+            },
+            {
+                name: 'STAFF RESPONSÁVEL',
+                value: `${staffMember} \n\`${staffMember.user.tag}\``,
+                inline: false
+            },
+            {
+                name: 'MOTIVO',
+                value: pendingData.motivo,
+                inline: false
+            },
+            {
+                name: 'DATA',
+                value: data,
+                inline: true
+            },
+            {
+                name: 'HORA',
+                value: hora,
+                inline: true
+            },
+            {
+                name: 'TOTAL DE ADVERTÊNCIAS',
+                value: `${totalWarnings}`,
+                inline: true
+            },
+            {
+                name: 'AÇÃO',
+                value: actionText,
+                inline: false
+            },
+            {
+                name: 'HISTÓRICO COMPLETO',
+                value: historicoTexto,
+                inline: false
+            }
+        )
+        .setFooter({
+            text: 'Sistema profissional de advertências B12'
+        });
+
+    if (logChannel) {
+        await logChannel.send({
+            embeds: [embedLog]
+        }).catch(() => {});
+    }
+
+    const embedDM = new EmbedBuilder()
+        .setColor('#ff0000')
+        .setTitle('🚨 VOCÊ RECEBEU UMA ADVERTÊNCIA')
+        .addFields(
+            {
+                name: 'SERVIDOR',
+                value: guild.name,
+                inline: false
+            },
+            {
+                name: 'MOTIVO',
+                value: pendingData.motivo,
+                inline: false
+            },
+            {
+                name: 'STAFF RESPONSÁVEL',
+                value: staffMember.user.tag,
+                inline: false
+            },
+            {
+                name: 'DATA',
+                value: data,
+                inline: true
+            },
+            {
+                name: 'HORA',
+                value: hora,
+                inline: true
+            },
+            {
+                name: 'TOTAL DE ADVERTÊNCIAS',
+                value: `${totalWarnings}`,
+                inline: true
+            },
+            {
+                name: 'AÇÃO APLICADA',
+                value: actionText,
+                inline: false
+            }
+        )
+        .setFooter({
+            text: 'Caso tenha dúvidas, contate a administração.'
+        });
+
+    await alvoMember.send({
+        embeds: [embedDM]
+    }).catch(() => {});
+
+    if (banido) {
+        await alvoMember.ban({
+            reason: `4ª advertência recebida. Motivo atual: ${pendingData.motivo}`
+        }).catch(() => {});
+    }
+
+    await message.reply(
+        `✅ Advertência aplicada com sucesso em ${alvoMember}.\n` +
+        `📌 Total atual: **${totalWarnings}**`
+    ).then(msg => setTimeout(() => msg.delete().catch(() => {}), 15000)).catch(() => {});
 }
 
 module.exports = {
-    name: 'interactionCreate',
+    name: 'messageCreate',
 
-    async execute(interaction) {
-        // ==================================================
-        // BOTÃO DO PAINEL DE REGISTRO
-        // ==================================================
-        if (interaction.isButton() && interaction.customId === 'abrir_registro') {
-            if (interaction.channelId !== REGISTRO_PANEL_CHANNEL_ID) {
-                return interaction.reply({
-                    content: '❌ Este botão só pode ser usado no painel oficial de registro.',
-                    ephemeral: true
-                });
-            }
+    async execute(message, client) {
+        if (!message.guild) return;
+        if (message.author.bot) return;
 
-            const modal = new ModalBuilder()
-                .setCustomId('submit_registro')
-                .setTitle('Criar seu registro');
-
-            const nomeInput = new TextInputBuilder()
-                .setCustomId('registro_nome_city')
-                .setLabel('QUAL SEU NOME NA CITY?')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-                .setPlaceholder('Ex: Kauã, Barbosa, Duozin');
-
-            const idInput = new TextInputBuilder()
-                .setCustomId('registro_id_city')
-                .setLabel('QUAL O SEU ID?')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true)
-                .setPlaceholder('Ex: 123, 456, 999');
-
-            const row1 = new ActionRowBuilder().addComponents(nomeInput);
-            const row2 = new ActionRowBuilder().addComponents(idInput);
-
-            modal.addComponents(row1, row2);
-
-            return interaction.showModal(modal);
+        const avisoCommand = client.commands.get('aviso');
+        if (avisoCommand && typeof avisoCommand.handlePendingAvisoConfirmation === 'function') {
+            const handledAviso = await avisoCommand.handlePendingAvisoConfirmation(message);
+            if (handledAviso) return;
         }
 
-        // ==================================================
-        // ENVIO DO FORMULÁRIO DE REGISTRO
-        // ==================================================
-        if (interaction.isModalSubmit() && interaction.customId === 'submit_registro') {
-            const nomeCity = interaction.fields.getTextInputValue('registro_nome_city').trim();
-            const idCity = interaction.fields.getTextInputValue('registro_id_city').trim();
+        {
+            const pendingKey = `${message.guild.id}:${message.channel.id}:${message.author.id}`;
+            const pendingRank = getPendingRank(pendingKey);
 
-            const membro = interaction.member;
+            if (pendingRank) {
+                if (Date.now() > pendingRank.expiresAt) {
+                    deletePendingRank(pendingKey);
 
-            try {
-                for (const roleId of REGISTRO_REMOVE_ROLE_IDS) {
-                    if (membro.roles.cache.has(roleId)) {
-                        await membro.roles.remove(roleId).catch(() => {});
-                    }
+                    await message.reply('❌ O tempo para informar os cargos expirou.')
+                        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+                        .catch(() => {});
+                    return;
                 }
 
-                for (const roleId of REGISTRO_ADD_ROLE_IDS) {
-                    if (!membro.roles.cache.has(roleId)) {
-                        await membro.roles.add(roleId).catch(() => {});
-                    }
+                const guildConfig = getGuildConfig(message.guild.id);
+                const admUpRoleIds = guildConfig.admUpRoleIds || [];
+                const podeUsar = admUpRoleIds.some(roleId => message.member.roles.cache.has(roleId));
+
+                if (!podeUsar) {
+                    deletePendingRank(pendingKey);
+
+                    await message.reply('❌ Você não tem mais permissão para concluir essa ação.')
+                        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+                        .catch(() => {});
+                    return;
                 }
 
-                const novoApelido = `YKZ | ${nomeCity}#${idCity}`;
-                await membro.setNickname(novoApelido).catch(() => {});
-
-                return interaction.reply({
-                    content:
-                        `✅ Seu registro foi concluído com sucesso.\n\n` +
-                        `**Nome na city:** ${nomeCity}\n` +
-                        `**ID:** ${idCity}\n` +
-                        `**Apelido definido para:** \`${novoApelido}\``,
-                    ephemeral: true
-                });
-            } catch (error) {
-                console.error('❌ Erro ao concluir registro:', error);
-
-                return interaction.reply({
-                    content: '❌ Ocorreu um erro ao concluir seu registro.',
-                    ephemeral: true
-                });
+                deletePendingRank(pendingKey);
+                await aplicarMudancaDeCargo(message, pendingRank);
+                await message.delete().catch(() => {});
+                return;
             }
         }
 
-        // ==================================================
-        // BOTÃO DE ABRIR TRANSFERÊNCIA
-        // ==================================================
-        if (interaction.isButton() && interaction.customId === 'abrir_transferencia') {
-            if (interaction.channelId !== PAINEL_TRANSFERENCIA_CHANNEL_ID) {
-                return interaction.reply({
-                    content: '❌ Este botão só pode ser usado no painel oficial de transferência.',
-                    ephemeral: true
-                });
-            }
+        if (message.content.toLowerCase().trim() === 'confirmar') {
+            const pendingKey = `${message.guild.id}:${message.channel.id}:${message.author.id}`;
+            const pendingAdv = getPendingAdv(pendingKey);
 
-            const guildConfig = getGuildConfig(interaction.guild.id);
-            const admRecRoleIds = guildConfig.admRecRoleIds || [];
+            if (pendingAdv) {
+                if (Date.now() > pendingAdv.expiresAt) {
+                    deletePendingAdv(pendingKey);
 
-            if (!admRecRoleIds.length) {
-                return interaction.reply({
-                    content: '❌ Nenhum cargo foi configurado em `!setadmrec`.',
-                    ephemeral: true
-                });
-            }
-
-            const categoriaDoPainel = interaction.channel.parentId;
-
-            if (!categoriaDoPainel) {
-                return interaction.reply({
-                    content: '❌ O canal do painel precisa estar dentro de uma categoria.',
-                    ephemeral: true
-                });
-            }
-
-            const existente = interaction.guild.channels.cache.find(channel =>
-                channel.topic === `transfer-owner:${interaction.user.id}`
-            );
-
-            if (existente) {
-                return interaction.reply({
-                    content: `❌ Você já possui uma transferência aberta em ${existente}.`,
-                    ephemeral: true
-                });
-            }
-
-            const nomeCanal = `transferencia-${interaction.user.username}`
-                .toLowerCase()
-                .normalize('NFD')
-                .replace(/[\u0300-\u036f]/g, '')
-                .replace(/[^a-z0-9-]/g, '')
-                .slice(0, 90);
-
-            const permissionOverwrites = [
-                {
-                    id: interaction.guild.id,
-                    deny: [PermissionsBitField.Flags.ViewChannel]
-                },
-                {
-                    id: interaction.user.id,
-                    allow: [
-                        PermissionsBitField.Flags.ViewChannel,
-                        PermissionsBitField.Flags.SendMessages,
-                        PermissionsBitField.Flags.ReadMessageHistory,
-                        PermissionsBitField.Flags.AttachFiles,
-                        PermissionsBitField.Flags.EmbedLinks
-                    ]
+                    await message.reply('❌ O tempo para confirmar a advertência expirou.')
+                        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+                        .catch(() => {});
+                    return;
                 }
-            ];
 
-            for (const roleId of admRecRoleIds) {
-                permissionOverwrites.push({
-                    id: roleId,
-                    allow: [
-                        PermissionsBitField.Flags.ViewChannel,
-                        PermissionsBitField.Flags.SendMessages,
-                        PermissionsBitField.Flags.ReadMessageHistory,
-                        PermissionsBitField.Flags.AttachFiles,
-                        PermissionsBitField.Flags.EmbedLinks,
-                        PermissionsBitField.Flags.ManageChannels
-                    ]
-                });
+                const guildConfig = getGuildConfig(message.guild.id);
+                const admAdvRoleIds = guildConfig.admAdvRoleIds || [];
+                const podeAdvertir = admAdvRoleIds.some(roleId => message.member.roles.cache.has(roleId));
+
+                if (!podeAdvertir) {
+                    await message.reply('❌ Você não tem mais permissão para confirmar advertências.')
+                        .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+                        .catch(() => {});
+                    deletePendingAdv(pendingKey);
+                    return;
+                }
+
+                deletePendingAdv(pendingKey);
+                await aplicarAdvertencia(message, pendingAdv);
+                await message.delete().catch(() => {});
+                return;
             }
-
-            const canal = await interaction.guild.channels.create({
-                name: nomeCanal,
-                type: ChannelType.GuildText,
-                parent: categoriaDoPainel,
-                topic: `transfer-owner:${interaction.user.id}`,
-                permissionOverwrites
-            });
-
-            setSession(canal.id, {
-                type: 'transferencia',
-                guildId: interaction.guild.id,
-                userId: interaction.user.id,
-                currentQuestionIndex: 0,
-                answers: {},
-                status: 'collecting'
-            });
-
-            await canal.send({
-                content:
-                    `${interaction.user}\n\n` +
-                    `Sua solicitação de transferência foi iniciada.\n` +
-                    `Responda as perguntas abaixo uma por vez.\n\n` +
-                    `**${QUESTIONS[0]}**`
-            });
-
-            return interaction.reply({
-                content: `✅ Sua transferência foi aberta em ${canal}.`,
-                ephemeral: true
-            });
         }
 
-        // ==================================================
-        // APROVAR TRANSFERÊNCIA
-        // ==================================================
-        if (interaction.isButton() && interaction.customId === 'aprovar_transferencia') {
-            const guildConfig = getGuildConfig(interaction.guild.id);
-            const admRecRoleIds = guildConfig.admRecRoleIds || [];
+        const session = getSession(message.channel.id);
 
-            if (!hasAnyConfiguredRole(interaction.member, admRecRoleIds)) {
-                return interaction.reply({
-                    content: '❌ Apenas os cargos configurados em `!setadmrec` podem aprovar.',
-                    ephemeral: true
+        if (session && session.type === 'transferencia' && session.status === 'collecting') {
+            if (message.author.id !== session.userId) return;
+
+            const currentIndex = session.currentQuestionIndex || 0;
+            const answers = session.answers || {};
+
+            const answerValue =
+                message.attachments.size > 0
+                    ? message.attachments.map(att => att.url).join('\n')
+                    : message.content.trim();
+
+            if (!answerValue) {
+                await message.reply('❌ Responda a pergunta para continuar.')
+                    .then(msg => setTimeout(() => msg.delete().catch(() => {}), 6000))
+                    .catch(() => {});
+                return;
+            }
+
+            answers[`q${currentIndex + 1}`] = answerValue;
+
+            const nextIndex = currentIndex + 1;
+
+            if (nextIndex < QUESTIONS.length) {
+                updateSession(message.channel.id, {
+                    answers,
+                    currentQuestionIndex: nextIndex
                 });
+
+                await message.channel.send(`**${QUESTIONS[nextIndex]}**`);
+                return;
             }
 
-            const message = interaction.message;
-            const embedAtual = message.embeds[0];
+            updateSession(message.channel.id, {
+                answers,
+                currentQuestionIndex: nextIndex,
+                status: 'completed'
+            });
 
-            if (!embedAtual) {
-                return interaction.reply({
-                    content: '❌ Não foi possível aprovar esta transferência.',
-                    ephemeral: true
-                });
+            const canalRevisao = message.guild.channels.cache.get(REVISAO_TRANSFERENCIA_CHANNEL_ID);
+
+            if (!canalRevisao) {
+                await message.channel.send('❌ Não encontrei o canal de revisão da transferência.');
+                return;
             }
 
-            const footerText = embedAtual.footer?.text || '';
-            const match = footerText.match(/Canal: (\d+)/);
-            const transferChannelId = match ? match[1] : null;
-
-            let userId = null;
-            const userField = embedAtual.fields?.find(field => field.name === 'USUÁRIO');
-            if (userField?.value) {
-                const userMatch = userField.value.match(/<@!?(\d+)>/);
-                if (userMatch) {
-                    userId = userMatch[1];
-                }
-            }
-
-            const novosCampos = (embedAtual.fields || []).filter(
-                field => field.name !== 'STATUS' && field.name !== 'RESPONSÁVEL'
-            );
-
-            novosCampos.push(
-                {
-                    name: 'STATUS',
-                    value: 'APROVADA',
-                    inline: true
-                },
-                {
-                    name: 'RESPONSÁVEL',
-                    value: `${interaction.user}`,
-                    inline: true
-                }
-            );
-
-            const embedNovo = EmbedBuilder.from(embedAtual)
+            const embed = new EmbedBuilder()
                 .setColor('#2B2D31')
-                .setFields(novosCampos);
+                .setTitle('PAINEL DE TRANSFERENCIA')
+                .addFields(
+                    {
+                        name: 'USUÁRIO',
+                        value: `<@${session.userId}>`,
+                        inline: false
+                    },
+                    {
+                        name: '1 - QUAL SEU NOME NA CIDADE?',
+                        value: answers.q1 || 'Não informado',
+                        inline: false
+                    },
+                    {
+                        name: '2 - QUAL SEU ID NA CIDADE?',
+                        value: answers.q2 || 'Não informado',
+                        inline: false
+                    },
+                    {
+                        name: '3 - QUAL CORP/FAC VOCE FAZIA PARTE?',
+                        value: answers.q3 || 'Não informado',
+                        inline: false
+                    },
+                    {
+                        name: '4 - PROVAS: FOTO/PRINT',
+                        value: answers.q4 || 'Não informado',
+                        inline: false
+                    }
+                )
+                .setFooter({
+                    text: `Canal: ${message.channel.id}`
+                });
 
-            const disabledRow = new ActionRowBuilder().addComponents(
+            const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
-                    .setCustomId('aprovar_transferencia_disabled')
-                    .setLabel('APROVADA')
-                    .setStyle(ButtonStyle.Success)
-                    .setDisabled(true),
+                    .setCustomId('aprovar_transferencia')
+                    .setLabel('APROVAR')
+                    .setStyle(ButtonStyle.Success),
+
                 new ButtonBuilder()
-                    .setCustomId('recusar_transferencia_disabled')
+                    .setCustomId('recusar_transferencia')
                     .setLabel('RECUSAR')
                     .setStyle(ButtonStyle.Danger)
-                    .setDisabled(true)
             );
 
-            await interaction.update({
-                embeds: [embedNovo],
-                components: [disabledRow]
+            await canalRevisao.send({
+                embeds: [embed],
+                components: [row]
             });
 
-            if (userId) {
-                const membro = await interaction.guild.members.fetch(userId).catch(() => null);
+            await message.channel.send(
+                '✅ Suas respostas foram enviadas para análise. Agora é só aguardar um recrutador aceitar sua transferência.\n\n' +
+                '🗑️ Este canal será apagado em 10 segundos.'
+            );
 
-                if (membro) {
-                    await membro.roles.add(CARGO_APROVADO_TRANSFERENCIA_ID).catch(() => {});
-
-                    await membro.send(
-                        `✅ Sua transferência foi **ACEITA** em **${interaction.guild.name}**.\n` +
-                        `👤 Responsável: **${interaction.user.tag}**`
-                    ).catch(() => {});
-                }
-            }
-
-            if (transferChannelId) {
-                const canal = interaction.guild.channels.cache.get(transferChannelId);
-                if (canal) {
-                    await canal.send(`✅ ${interaction.user} aprovou esta transferência.`);
-                }
-
-                const session = getSession(transferChannelId);
-                if (session) {
-                    updateSession(transferChannelId, {
-                        status: 'approved',
-                        handledBy: interaction.user.id
-                    });
-                }
-            }
+            setTimeout(async () => {
+                deleteSession(message.channel.id);
+                await message.channel.delete().catch(() => {});
+            }, 10000);
 
             return;
         }
 
-        // ==================================================
-        // RECUSAR TRANSFERÊNCIA
-        // ==================================================
-        if (interaction.isButton() && interaction.customId === 'recusar_transferencia') {
-            const guildConfig = getGuildConfig(interaction.guild.id);
-            const admRecRoleIds = guildConfig.admRecRoleIds || [];
+        if (!message.content.startsWith(PREFIX)) return;
 
-            if (!hasAnyConfiguredRole(interaction.member, admRecRoleIds)) {
-                return interaction.reply({
-                    content: '❌ Apenas os cargos configurados em `!setadmrec` podem recusar.',
-                    ephemeral: true
-                });
-            }
+        const args = message.content.slice(PREFIX.length).trim().split(/\s+/);
+        const commandName = args.shift()?.toLowerCase();
 
-            const message = interaction.message;
-            const embedAtual = message.embeds[0];
+        if (!commandName) return;
 
-            if (!embedAtual) {
-                return interaction.reply({
-                    content: '❌ Não foi possível recusar esta transferência.',
-                    ephemeral: true
-                });
-            }
+        const handledBp = await handleStandaloneBpCommands(message, commandName, args);
+        if (handledBp) return;
 
-            const footerText = embedAtual.footer?.text || '';
-            const match = footerText.match(/Canal: (\d+)/);
-            const transferChannelId = match ? match[1] : null;
+        const command = client.commands.get(commandName);
+        if (!command) return;
 
-            let userId = null;
-            const userField = embedAtual.fields?.find(field => field.name === 'USUÁRIO');
-            if (userField?.value) {
-                const userMatch = userField.value.match(/<@!?(\d+)>/);
-                if (userMatch) {
-                    userId = userMatch[1];
-                }
-            }
+        try {
+            await command.execute(message, args, client);
+        } catch (error) {
+            console.error(`❌ Erro ao executar o comando ${commandName}:`, error);
 
-            const novosCampos = (embedAtual.fields || []).filter(
-                field => field.name !== 'STATUS' && field.name !== 'RESPONSÁVEL'
-            );
-
-            novosCampos.push(
-                {
-                    name: 'STATUS',
-                    value: 'RECUSADA',
-                    inline: true
-                },
-                {
-                    name: 'RESPONSÁVEL',
-                    value: `${interaction.user}`,
-                    inline: true
-                }
-            );
-
-            const embedNovo = EmbedBuilder.from(embedAtual)
-                .setColor('#2B2D31')
-                .setFields(novosCampos);
-
-            const disabledRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setCustomId('aprovar_transferencia_disabled')
-                    .setLabel('APROVAR')
-                    .setStyle(ButtonStyle.Success)
-                    .setDisabled(true),
-                new ButtonBuilder()
-                    .setCustomId('recusar_transferencia_disabled')
-                    .setLabel('RECUSADA')
-                    .setStyle(ButtonStyle.Danger)
-                    .setDisabled(true)
-            );
-
-            await interaction.update({
-                embeds: [embedNovo],
-                components: [disabledRow]
-            });
-
-            if (userId) {
-                const membro = await interaction.guild.members.fetch(userId).catch(() => null);
-
-                if (membro) {
-                    await membro.send(
-                        `❌ Sua transferência foi **RECUSADA** em **${interaction.guild.name}**.\n` +
-                        `👤 Responsável: **${interaction.user.tag}**`
-                    ).catch(() => {});
-                }
-            }
-
-            if (transferChannelId) {
-                const canal = interaction.guild.channels.cache.get(transferChannelId);
-                if (canal) {
-                    await canal.send(`❌ ${interaction.user} recusou esta transferência.`);
-                }
-
-                const session = getSession(transferChannelId);
-                if (session) {
-                    updateSession(transferChannelId, {
-                        status: 'rejected',
-                        handledBy: interaction.user.id
-                    });
-                }
-            }
-
-            return;
+            await message.reply({
+                content: '❌ Ocorreu um erro ao executar esse comando.'
+            }).catch(() => {});
         }
     }
 };

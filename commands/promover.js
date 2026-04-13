@@ -2,12 +2,17 @@ const { EmbedBuilder } = require('discord.js');
 const { getGuildConfig } = require('../guildConfig');
 
 const PROMO_LOG_CHANNEL_ID = '1474852514581975245';
+const promoteCooldown = new Map();
 
 function formatDateTime(date) {
     return {
         data: date.toLocaleDateString('pt-BR'),
         hora: date.toLocaleTimeString('pt-BR')
     };
+}
+
+function buildCooldownKey(guildId, authorId, targetId) {
+    return `${guildId}:${authorId}:${targetId}`;
 }
 
 module.exports = {
@@ -40,6 +45,22 @@ module.exports = {
                 .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
                 .catch(() => {});
         }
+
+        const cooldownKey = buildCooldownKey(message.guild.id, message.author.id, membro.id);
+        const now = Date.now();
+        const lastExecution = promoteCooldown.get(cooldownKey);
+
+        if (lastExecution && now - lastExecution < 5000) {
+            return message.reply('⚠️ Aguarde alguns segundos antes de repetir esta promoção.')
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 8000))
+                .catch(() => {});
+        }
+
+        promoteCooldown.set(cooldownKey, now);
+
+        setTimeout(() => {
+            promoteCooldown.delete(cooldownKey);
+        }, 5000);
 
         const canalLog = message.guild.channels.cache.get(PROMO_LOG_CHANNEL_ID);
 
@@ -78,7 +99,7 @@ module.exports = {
                 }
             )
             .setFooter({
-                text: 'Sistema de promoções YKZ'
+                text: `Sistema de promoções YKZ • PID ${process.pid}`
             })
             .setTimestamp();
 

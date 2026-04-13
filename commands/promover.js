@@ -1,5 +1,14 @@
+const { EmbedBuilder } = require('discord.js');
 const { getGuildConfig } = require('../guildConfig');
-const { createPendingRank, deletePendingRank } = require('../utils/pendingRank');
+
+const PROMO_LOG_CHANNEL_ID = '1474852514581975245';
+
+function formatDateTime(date) {
+    return {
+        data: date.toLocaleDateString('pt-BR'),
+        hora: date.toLocaleTimeString('pt-BR')
+    };
+}
 
 module.exports = {
     name: 'promover',
@@ -32,31 +41,52 @@ module.exports = {
                 .catch(() => {});
         }
 
-        const pendingKey = `${message.guild.id}:${message.channel.id}:${message.author.id}`;
+        const canalLog = message.guild.channels.cache.get(PROMO_LOG_CHANNEL_ID);
 
-        createPendingRank(pendingKey, {
-            type: 'promocao',
-            guildId: message.guild.id,
-            channelId: message.channel.id,
-            staffId: message.author.id,
-            alvoId: membro.id,
-            createdAt: Date.now(),
-            expiresAt: Date.now() + 60000
-        });
+        if (!canalLog) {
+            return message.reply('❌ Não encontrei o canal de log de promoções.')
+                .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+                .catch(() => {});
+        }
 
-        await message.reply(
-            `📈 Promoção iniciada para ${membro}.\n\n` +
-            `Agora mencione **primeiro o cargo novo** e **depois o cargo antigo**.\n\n` +
-            `Exemplo:\n` +
-            `@CargoNovo @CargoAntigo\n\n` +
-            `⏳ Você tem 60 segundos para responder.`
-        ).then(msg => {
-            setTimeout(() => msg.delete().catch(() => {}), 15000);
-        }).catch(() => {});
+        const { data, hora } = formatDateTime(new Date());
 
-        setTimeout(() => {
-            deletePendingRank(pendingKey);
-        }, 60000);
+        const embed = new EmbedBuilder()
+            .setColor('#57F287')
+            .setTitle('📈 REGISTRO DE PROMOÇÃO')
+            .setDescription('Um membro foi promovido com sucesso.')
+            .addFields(
+                {
+                    name: 'MEMBRO PROMOVIDO',
+                    value: `${membro}\n\`${membro.user.tag}\``,
+                    inline: false
+                },
+                {
+                    name: 'RESPONSÁVEL',
+                    value: `${message.member}\n\`${message.author.tag}\``,
+                    inline: false
+                },
+                {
+                    name: 'DATA',
+                    value: data,
+                    inline: true
+                },
+                {
+                    name: 'HORA',
+                    value: hora,
+                    inline: true
+                }
+            )
+            .setFooter({
+                text: 'Sistema de promoções YKZ'
+            })
+            .setTimestamp();
+
+        await canalLog.send({ embeds: [embed] }).catch(() => {});
+
+        await message.reply(`✅ Promoção registrada com sucesso para ${membro}.`)
+            .then(msg => setTimeout(() => msg.delete().catch(() => {}), 10000))
+            .catch(() => {});
 
         await message.delete().catch(() => {});
     }

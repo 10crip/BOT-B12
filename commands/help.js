@@ -100,7 +100,10 @@ module.exports = {
                         `**Como usar:** \`${prefix}removecategoria 123456789012345678\`\n\n` +
                         `\`${prefix}listabp\`\n` +
                         `Mostra todos os canais e categorias liberados no bate-ponto.\n` +
-                        `**Como usar:** \`${prefix}listabp\``,
+                        `**Como usar:** \`${prefix}listabp\`\n\n` +
+                        `\`${prefix}resetbp\`\n` +
+                        `Reseta todas as horas contadas no rank do bate-ponto deste servidor.\n` +
+                        `**Como usar:** \`${prefix}resetbp\``,
                     inline: false
                 },
                 {

@@ -4,6 +4,9 @@ const { Client, GatewayIntentBits, Collection, Partials } = require('discord.js'
 const fs = require('fs');
 const path = require('path');
 
+console.log(`🚀 Starting bot process at ${new Date().toLocaleString('pt-BR')}`);
+console.log(`🆔 PID: ${process.pid}`);
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -38,6 +41,8 @@ if (fs.existsSync(commandsPath)) {
             console.error(`❌ Error loading command ${file}:`, error);
         }
     }
+} else {
+    console.log('⚠️ Commands folder not found.');
 }
 
 const eventsPath = path.join(__dirname, 'events');
@@ -65,6 +70,8 @@ if (fs.existsSync(eventsPath)) {
             console.error(`❌ Error loading event ${file}:`, error);
         }
     }
+} else {
+    console.log('⚠️ Events folder not found.');
 }
 
 process.on('unhandledRejection', error => {

@@ -13,7 +13,7 @@ module.exports = {
 
         const embed = new EmbedBuilder()
             .setColor('#2B2D31')
-            .setTitle('ATENDIMENTO B12')
+            .setTitle('ATENDIMENTO YAKUZA')
             .setDescription(
                 'Está com alguma dúvida, problema ou precisa falar com a equipe? Selecione uma das opções abaixo para abrir um ticket e receber um atendimento personalizado de acordo com a sua necessidade.\n\n' +
                 '• **Esclarecimento de dúvidas gerais;**\n' +

@@ -29,8 +29,47 @@ module.exports = {
 
         const embed = new EmbedBuilder()
             .setColor('#2B2D31')
-            .setTitle('BATE-PONTO YKZ')
-            .setDescription('CLIQUE NO BOTAO ABAIXO PARA INICIAR SEU BATE-PONTO');
+            .setTitle('⏱️ BATE-PONTO YKZ')
+            .setDescription(
+                '**Gerencie seu ponto de forma rápida e organizada usando os botões abaixo.**\n\n' +
+                'Use este painel para iniciar sua sessão, encerrar seu ponto ao finalizar o expediente e consultar o rank quando tiver permissão.'
+            )
+            .addFields(
+                {
+                    name: '✅ COMO FUNCIONA',
+                    value:
+                        '• Entre em uma call permitida.\n' +
+                        '• Clique em **INICIAR PONTO** para começar a contagem.\n' +
+                        '• Ao finalizar, clique em **FECHAR PONTO** para registrar seu tempo.',
+                    inline: false
+                },
+                {
+                    name: '📌 REGRAS IMPORTANTES',
+                    value:
+                        '• O ponto só pode ser iniciado em **canais/categorias liberados**.\n' +
+                        '• Se você sair da call permitida e ficar **1 minuto e 30 segundos fora**, o ponto será **fechado automaticamente**.\n' +
+                        '• O tempo é contabilizado apenas enquanto sua sessão estiver válida.',
+                    inline: false
+                },
+                {
+                    name: '🏆 RANK',
+                    value:
+                        'O botão **RANK** mostra o ranking de tempo registrado no bate-ponto.\n' +
+                        'Esse botão é restrito aos cargos com permissão configurada.',
+                    inline: false
+                },
+                {
+                    name: '⚠️ ATENÇÃO',
+                    value:
+                        'Antes de iniciar, confirme se você está na call correta.\n' +
+                        'Caso o sistema informe erro ao abrir o ponto, verifique se o canal ou a categoria foi liberado pela administração.',
+                    inline: false
+                }
+            )
+            .setFooter({
+                text: 'Sistema oficial de bate-ponto YKZ'
+            })
+            .setTimestamp();
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()

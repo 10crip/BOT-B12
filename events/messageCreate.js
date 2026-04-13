@@ -33,6 +33,19 @@ const QUESTIONS = [
     '4 - PROVAS: FOTO/PRINT'
 ];
 
+// =========================
+// TRAVA ANTI-DUPLICAÇÃO
+// =========================
+const processedMessages = new Set();
+
+function markMessageAsProcessed(messageId) {
+    processedMessages.add(messageId);
+
+    setTimeout(() => {
+        processedMessages.delete(messageId);
+    }, 15000);
+}
+
 function formatDateTime(date) {
     const data = date.toLocaleDateString('pt-BR');
     const hora = date.toLocaleTimeString('pt-BR');
@@ -384,6 +397,9 @@ module.exports = {
     async execute(message, client) {
         if (!message.guild) return;
         if (message.author.bot) return;
+
+        if (processedMessages.has(message.id)) return;
+        markMessageAsProcessed(message.id);
 
         const avisoCommand = client.commands.get('aviso');
         if (avisoCommand && typeof avisoCommand.handlePendingAvisoConfirmation === 'function') {

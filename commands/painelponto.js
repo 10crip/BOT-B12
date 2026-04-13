@@ -29,7 +29,7 @@ module.exports = {
 
         const embed = new EmbedBuilder()
             .setColor('#2B2D31')
-            .setTitle('BATE-PONTO B12')
+            .setTitle('BATE-PONTO YKZ')
             .setDescription('CLIQUE NO BOTAO ABAIXO PARA INICIAR SEU BATE-PONTO');
 
         const row = new ActionRowBuilder().addComponents(
